@@ -1,0 +1,106 @@
+import { z } from "zod";
+
+export const WordSchema = z.object({
+  word: z.string(),
+  start: z.number(),
+  end: z.number(),
+});
+
+/** Transcript API response. `lines` is derived server-side, never persisted. */
+export const TranscriptSchema = z.object({
+  model: z.string(),
+  /** Last time this transcript was (re)written. */
+  updatedAt: z.iso.datetime(),
+  words: z.array(WordSchema),
+  lines: z.array(
+    z.object({
+      start: z.number(),
+      text: z.string(),
+    }),
+  ),
+});
+
+/** Domain shape for a podcast (camelCase from the DB row). */
+export const PodcastSchema = z.object({
+  id: z.string(),
+  feedUrl: z.string(),
+  guid: z.string().nullable(),
+  title: z.string(),
+  description: z.string().nullable(),
+  language: z.string().nullable(),
+  author: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  licenseUrl: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
+export const PodcastListSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  imageUrl: z.string().nullable(),
+});
+
+/** Domain shape for an episode (camelCase from the DB row). */
+export const EpisodeSchema = z.object({
+  id: z.string(),
+  guid: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  audioUrl: z.string(),
+  audioLength: z.number().nullable(),
+  durationSec: z.number().nullable(),
+  publishedAt: z.iso.datetime().nullable(),
+  episodeType: z.enum(["full", "trailer", "bonus"]).nullable(),
+});
+
+/** Query params for paginated episode lists (?limit=50&offset=0&q=…). */
+export const ListEpisodesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  /** Case-insensitive title filter; empty means no filtering. */
+  q: z.string().trim().max(200).optional().default(""),
+});
+
+export const EpisodeListSchema = z.object({
+  episodes: z.array(EpisodeSchema),
+  total: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
+});
+
+/** GET /api/podcasts/:id — podcast info plus its first page of episodes. */
+export const PodcastDetailSchema = z.object({
+  podcast: PodcastSchema,
+  episodes: z.array(EpisodeSchema),
+  total: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
+});
+
+/** GET /api/episodes/:id — episode with parent podcast and transcript state. */
+export const EpisodeDetailSchema = z.object({
+  podcast: PodcastSchema,
+  episode: EpisodeSchema,
+  /** Source of truth: the DB transcript. */
+  hasTranscript: z.boolean(),
+  /** Source of truth: the server's in-memory job registry (resets on restart). */
+  transcribeStatus: z.enum(["idle", "queued", "running", "failed"]),
+  transcribeError: z.string().nullable(),
+});
+
+/** Body for POST /api/podcasts — import a show from its RSS feed URL. */
+export const CreatePodcastInputSchema = z.object({
+  feedUrl: z.string().trim().pipe(z.url()),
+});
+
+export type Word = z.infer<typeof WordSchema>;
+export type Transcript = z.infer<typeof TranscriptSchema>;
+export type Podcast = z.infer<typeof PodcastSchema>;
+export type PodcastList = z.infer<typeof PodcastListSchema>;
+export type Episode = z.infer<typeof EpisodeSchema>;
+export type EpisodeDetail = z.infer<typeof EpisodeDetailSchema>;
+export type ListEpisodesQuery = z.infer<typeof ListEpisodesQuerySchema>;
+export type EpisodeList = z.infer<typeof EpisodeListSchema>;
+export type PodcastDetail = z.infer<typeof PodcastDetailSchema>;
+export type CreatePodcastInput = z.infer<typeof CreatePodcastInputSchema>;

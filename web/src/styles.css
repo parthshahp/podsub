@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark;
+}
+
+/* The page background lives on <html> so it always covers the viewport —
+   body is content-sized, so short pages would otherwise show daisyUI's
+   base-100 root background below the fold. */
+html {
+  background-color: var(--color-base-200);
+}
+
+/* Visible keyboard focus fallback for any interactive element without its
+   own focus ring. Individual components may add Tailwind focus-visible
+   rings on top of this. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+  /* Skip-link target: programmatic focus shouldn't show an outline. */
+  #main-content:focus:not(:focus-visible) {
+    outline: none;
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@podsub/schemas",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
