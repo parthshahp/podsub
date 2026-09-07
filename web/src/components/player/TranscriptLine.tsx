@@ -17,12 +17,15 @@ type TranscriptLineProps = {
 };
 
 /**
- * One transcript row, memoized; callers must pass stable callbacks/props.
+ * One transcript row (<li> of the parent <ol>), memoized; callers must
+ * pass stable callbacks/props.
  *
- * Seeking: clicking anywhere on the row (outside a button) seeks, and the
- * timestamp is a real button so keyboard users can seek too. Dictionary word
- * buttons are siblings — never nested — so each is independently
- * reachable by keyboard, mouse, and touch.
+ * Seeking: the timestamp is a real button with a machine-readable
+ * `dateTime`, and on hover-capable pointers clicking anywhere on the row
+ * (outside a button) seeks too. On touch the row itself never seeks — a
+ * missed word tap must not lose your place. Dictionary word buttons are
+ * siblings — never nested — so each is independently reachable by
+ * keyboard, mouse, and touch.
  */
 export const TranscriptLine = memo(function TranscriptLine({
   line,
@@ -36,15 +39,24 @@ export const TranscriptLine = memo(function TranscriptLine({
 }: TranscriptLineProps) {
   const timeLabel = formatClock(line.start);
   return (
-    <div
-      role="listitem"
+    <li
       aria-current={isActive ? true : undefined}
-      className={`group flex cursor-pointer items-start gap-1 rounded-md px-2 py-1.5 leading-relaxed transition-colors duration-300 ${
-        isActive ? "bg-primary/20" : "hover:bg-base-200"
+      className={`group flex cursor-pointer items-start gap-1 rounded-md px-2 py-2 text-[17px] leading-[2] transition-colors duration-300 md:py-1.5 md:text-base md:leading-relaxed [@media(hover:none)]:cursor-default ${
+        isActive
+          ? "bg-primary/30 shadow-[inset_3px_0_0_var(--color-primary)]"
+          : "hover:bg-base-200"
       }`}
       onClick={(e) => {
-        // Buttons in the row handle themselves; anything else seeks.
+        // Buttons in the row handle themselves; anything else seeks — but
+        // only where hover exists (desktop). On touch, tapping line text
+        // must never seek, or a missed word tap loses your place; the
+        // timestamp button is the seek affordance there.
         if ((e.target as HTMLElement).closest("button")) return;
+        if (
+          typeof window !== "undefined" &&
+          !window.matchMedia("(hover: hover)").matches
+        )
+          return;
         onSeek(line.start);
       }}
     >
@@ -55,7 +67,7 @@ export const TranscriptLine = memo(function TranscriptLine({
         title={`Seek to ${timeLabel}`}
         className="inline-flex min-h-11 shrink-0 items-center rounded px-1 text-xs text-base-content/50 tabular-nums select-none md:min-h-0 md:py-0.5"
       >
-        <time>{timeLabel}</time>
+        <time dateTime={`PT${line.start}S`}>{timeLabel}</time>
       </button>
       <span className="min-w-0 flex-1">
         <WordSpans
@@ -67,6 +79,7 @@ export const TranscriptLine = memo(function TranscriptLine({
           onWordActivate={onWordActivate}
         />
       </span>
-    </div>
+      {isActive && <span className="sr-only"> (current line)</span>}
+    </li>
   );
 });

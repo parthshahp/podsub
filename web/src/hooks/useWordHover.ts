@@ -91,6 +91,20 @@ export function useWordHover() {
     invokerRef.current = null;
   }, []);
 
+  /**
+   * Re-read the invoking word's rect after a scroll. The dialog captures
+   * its position at open time, so without this a scrolled transcript
+   * leaves the popover floating detached from its word.
+   */
+  const refreshDialogRect = useCallback(() => {
+    const el = invokerRef.current;
+    if (!el) return;
+    const { left, top, bottom, width } = el.getBoundingClientRect();
+    setDialogWord((prev) =>
+      prev ? { ...prev, rect: { left, top, bottom, width } } : prev,
+    );
+  }, []);
+
   /** `${lineIndex}:${start}` key of the open dialog word, for aria-expanded. */
   const dialogKey = dialogWord ? `${dialogWord.lineIndex}:${dialogWord.start}` : null;
 
@@ -104,5 +118,6 @@ export function useWordHover() {
     keepHover,
     openWord,
     closeDialog,
+    refreshDialogRect,
   };
 }

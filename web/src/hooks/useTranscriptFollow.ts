@@ -8,7 +8,7 @@ import { animateScrollTo } from "../lib/transcriptView";
  * when the target changes so scrolls never fight.
  */
 export function useTranscriptFollow(activeIdx: number) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLOListElement | null>(null);
   const [follow, setFollow] = useState(true);
   const cancelScrollRef = useRef<(() => void) | null>(null);
 

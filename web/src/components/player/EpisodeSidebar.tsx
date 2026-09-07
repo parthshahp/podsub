@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { formatDate, formatDuration } from "../../lib/format";
@@ -22,11 +23,34 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
     .filter(Boolean)
     .join(" · ");
   const description = episode.description ? stripHtml(episode.description) : "";
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  // Native <details> only closes via its <summary> — dismiss on outside
+  // tap and Esc so the overlay panel doesn't trap mobile users.
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      const details = detailsRef.current;
+      if (details?.open && !details.contains(e.target as Node))
+        details.open = false;
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      const details = detailsRef.current;
+      if (details?.open) details.open = false;
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
 
   return (
     <>
-      {/* Compact header for narrow screens. */}
-      <div className="relative flex shrink-0 items-center gap-3 border-b border-base-300 px-3 py-2 md:hidden">
+      {/* Compact header for narrow screens. Uses <header> + <h1> so mobile
+          keeps the same heading structure as the desktop sidebar. */}
+      <header className="relative flex shrink-0 items-center gap-3 border-b border-base-300 px-3 py-2 md:hidden">
         <Link
           to="/$slug/$id"
           params={{ slug, id: podcast.id }}
@@ -53,11 +77,13 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
           )}
         </Link>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{episode.title}</p>
+          <h1 id="episode-title-compact" className="truncate text-sm font-medium">
+            {episode.title}
+          </h1>
           <p className="truncate text-xs text-base-content/60">{podcast.title}</p>
         </div>
         {(meta || description) && (
-          <details className="shrink-0 text-xs">
+          <details ref={detailsRef} className="shrink-0 text-xs">
             <summary className="btn btn-ghost btn-sm min-h-11 rounded-full px-3">
               Details
             </summary>
@@ -73,10 +99,10 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
             </div>
           </details>
         )}
-      </div>
+      </header>
 
       {/* Full sidebar on desktop. */}
-      <aside className="hidden w-1/5 min-w-0 flex-col gap-4 overflow-y-auto border-r border-base-300 p-6 md:flex">
+      <aside aria-labelledby="episode-title-full" className="hidden w-1/5 min-w-0 flex-col gap-4 overflow-y-auto border-r border-base-300 p-6 md:flex">
         <Link
           to="/$slug/$id"
           params={{ slug, id: podcast.id }}
@@ -100,7 +126,9 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
           )}
         </Link>
         <div className="min-w-0">
-          <h1 className="text-sm font-medium">{episode.title}</h1>
+          <h1 id="episode-title-full" className="text-sm font-medium">
+            {episode.title}
+          </h1>
           <p className="text-xs text-base-content/60">{podcast.title}</p>
         </div>
         {meta && (

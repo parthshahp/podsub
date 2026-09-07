@@ -74,6 +74,7 @@ function EpisodePage() {
     keepHover,
     openWord,
     closeDialog,
+    refreshDialogRect,
   } = useWordHover();
   // Activated dialog takes precedence over the hover preview.
   const activeWord = dialogWord ?? hoveredWord;
@@ -88,6 +89,18 @@ function EpisodePage() {
     },
     [seek, setFollow],
   );
+
+  // The dialog captures its word's rect at open time — keep it anchored
+  // when the pane scrolls, and pause auto-follow while open so playback
+  // doesn't scroll the line away from under the popover.
+  const handleScrollHide = useCallback(() => {
+    hideHoveredWord();
+    refreshDialogRect();
+  }, [hideHoveredWord, refreshDialogRect]);
+
+  useEffect(() => {
+    if (dialogWord) setFollow(false);
+  }, [dialogWord, setFollow]);
 
   // Autoplay on arrival: the navigation click counts as the user gesture.
   useEffect(() => {
@@ -120,7 +133,7 @@ function EpisodePage() {
               onWordLeave={handleWordLeave}
               onWordActivate={openWord}
               onUserScroll={handleUserScroll}
-              onScrollHide={hideHoveredWord}
+              onScrollHide={handleScrollHide}
               onResumeFollow={() => setFollow(true)}
             />
             {activeWord && (
@@ -153,7 +166,7 @@ function EpisodePage() {
             {anki.status && (
               <div
                 role="status"
-                className={`alert absolute right-6 bottom-6 z-10 w-auto max-w-md py-2 text-sm shadow-lg ${
+                className={`alert absolute right-4 bottom-16 z-10 w-auto max-w-md py-2 text-sm shadow-lg sm:right-6 sm:bottom-6 ${
                   anki.status.kind === "success" ? "alert-success" : "alert-error"
                 }`}
               >

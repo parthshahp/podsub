@@ -9,7 +9,7 @@ type TranscriptPaneProps = {
   activeIdx: number;
   follow: boolean;
   dialogKey: string | null;
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: RefObject<HTMLOListElement | null>;
   onSeekLine: (start: number) => void;
   onWordEnter: (info: WordHoverInfo) => void;
   onWordLeave: () => void;
@@ -24,9 +24,11 @@ type TranscriptPaneProps = {
  * Renders a fragment — the parent provides the positioned wrapper so the
  * dictionary popover and status toast can overlay this pane.
  *
- * The active row carries `aria-current`; per-tick live announcements are
- * deliberately avoided (too chatty) — screen-reader users navigate rows as
- * a list with full seek/lookup controls on each.
+ * A real <ol> (lines are ordered) so screen readers announce position;
+ * the active row carries `aria-current` plus visually-hidden text.
+ * Per-tick live announcements are deliberately avoided (too chatty) —
+ * screen-reader users navigate rows as a list with full seek/lookup
+ * controls on each.
  */
 export function TranscriptPane({
   lines,
@@ -44,11 +46,10 @@ export function TranscriptPane({
 }: TranscriptPaneProps) {
   return (
     <>
-      <div
+      <ol
         ref={containerRef}
-        role="list"
         aria-label="Transcript"
-        className="h-full overflow-y-auto p-3 sm:p-6"
+        className="h-full list-none overflow-y-auto p-3 sm:p-6"
         onWheel={onUserScroll}
         onTouchMove={onUserScroll}
         onScroll={onScrollHide}
@@ -66,7 +67,7 @@ export function TranscriptPane({
             onWordActivate={onWordActivate}
           />
         ))}
-      </div>
+      </ol>
       {!follow && (
         <button
           className="btn absolute bottom-4 left-1/2 min-h-11 -translate-x-1/2 rounded-full shadow-md"

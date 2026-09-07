@@ -52,7 +52,7 @@ export function WordSpans({
             aria-haspopup="dialog"
             aria-expanded={expandedKey === `${lineIndex}:${seg.start}`}
             aria-controls={expandedKey === `${lineIndex}:${seg.start}` ? "dictionary-dialog" : undefined}
-            className="cursor-pointer rounded-sm px-px hover:bg-primary/15"
+            className="-my-1 cursor-pointer rounded-sm px-px py-1 hover:bg-primary/15"
             onMouseEnter={
               onWordEnter &&
               ((e) =>
