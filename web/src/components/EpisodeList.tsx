@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { PlayIcon, SearchIcon } from "./icons";
+import { ArchiveIcon, PlayIcon, SearchIcon, UnarchiveIcon } from "./icons";
 import { formatDate, formatDuration } from "../lib/format";
 import type { Episode } from "../types";
 
@@ -14,6 +14,13 @@ type Props = {
   /** True while a debounced server search is in flight. */
   searching: boolean;
   onPlay: (e: Episode) => void;
+  /** Archive / un-archive an episode (hidden from the default list). */
+  onToggleArchive: (e: Episode) => void;
+  /** Episode id with an archive request in flight (button disabled). */
+  archivePendingId: string | null;
+  /** Whether archived episodes are currently included in the list. */
+  showArchived: boolean;
+  onShowArchivedChange: (v: boolean) => void;
   hasMore: boolean;
   loadingMore: boolean;
   loadError: string | null;
@@ -27,6 +34,10 @@ export default function EpisodeList({
   onQueryChange,
   searching,
   onPlay,
+  onToggleArchive,
+  archivePendingId,
+  showArchived,
+  onShowArchivedChange,
   hasMore,
   loadingMore,
   loadError,
@@ -67,9 +78,24 @@ export default function EpisodeList({
         </span>
       </div>
 
+      <div className="mt-4 flex items-center gap-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/70 select-none">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => onShowArchivedChange(e.target.checked)}
+            className="checkbox checkbox-sm"
+          />
+          Show archived episodes
+        </label>
+      </div>
+
       <ul className="divide-y divide-base-300">
         {episodes.map((e) => (
-          <li key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6">
+          <li
+            key={e.id}
+            className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6 ${e.archived ? "opacity-50" : ""}`}
+          >
             <Link
               to="/player/$episodeId"
               params={{ episodeId: e.id }}
@@ -83,6 +109,19 @@ export default function EpisodeList({
             <span className="shrink-0 text-sm text-base-content/60 tabular-nums sm:w-16 sm:text-right">
               {e.durationSec != null ? formatDuration(e.durationSec) : ""}
             </span>
+            <button
+              className="btn btn-ghost btn-circle min-h-11 min-w-11"
+              onClick={() => onToggleArchive(e)}
+              disabled={archivePendingId === e.id}
+              aria-label={e.archived ? `Unarchive ${e.title}` : `Archive ${e.title}`}
+              title={e.archived ? "Unarchive episode" : "Archive episode"}
+            >
+              {e.archived ? (
+                <UnarchiveIcon className="h-5 w-5" />
+              ) : (
+                <ArchiveIcon className="h-5 w-5" />
+              )}
+            </button>
             <button
               className="btn btn-ghost btn-circle ml-auto min-h-11 min-w-11 sm:ml-0"
               onClick={() => onPlay(e)}

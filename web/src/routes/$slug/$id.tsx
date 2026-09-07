@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../../api";
 import EpisodeList from "../../components/EpisodeList";
@@ -51,6 +51,19 @@ function PodcastDetail() {
   const trimmedSearch = debouncedQuery.trim();
   const isSearching = trimmedSearch !== "";
 
+  // Whether archived episodes are included in the list (hidden by default).
+  const [showArchived, setShowArchived] = useState(false);
+  // Fresh page-0 + total after the archived toggle changes; null means the
+  // loader's first page is still current.
+  const [page0Override, setPage0Override] = useState<{
+    episodes: Episode[];
+    total: number;
+  } | null>(null);
+  const [archivePendingId, setArchivePendingId] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  // Skip the refetch on first mount — the loader already fetched page 0.
+  const firstRender = useRef(true);
+
   // Search results replace the paged browse list.
   const [searchEpisodes, setSearchEpisodes] = useState<Episode[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
@@ -63,9 +76,49 @@ function PodcastDetail() {
     setSearchEpisodes([]);
     setSearchTotal(0);
     setSearchError(null);
+    setArchiveError(null);
   }, [podcast.id, trimmedSearch]);
 
-  // Fetch matching episodes (all pages, not just loaded).
+  // A new podcast means the loader fetched a fresh first page again.
+  useEffect(() => {
+    setPage0Override(null);
+    setShowArchived(false);
+  }, [podcast.id]);
+
+  // Re-fetch page 0 when the archived toggle (or podcast) changes, since the
+  // loader only fetches the default active-only first page.
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    let cancelled = false;
+    setExtraPages([]);
+    api.api.podcasts[":id"].episodes
+      .$get({
+        param: { id: podcast.id },
+        query: {
+          limit: String(PAGE_SIZE),
+          offset: "0",
+          ...(showArchived ? { includeArchived: "true" } : {}),
+        },
+      })
+      .then(async (res) => {
+        const data = await res.json();
+        if (cancelled) return;
+        if ("error" in data) throw new Error(data.error);
+        setPage0Override({ episodes: data.episodes, total: data.total });
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [podcast.id, showArchived]);
+
+  // Fetch matching episodes (all pages, not just loaded). Archived episodes
+  // are included only when the toggle is on.
   useEffect(() => {
     if (!isSearching) return;
     let cancelled = false;
@@ -73,7 +126,12 @@ function PodcastDetail() {
     api.api.podcasts[":id"].episodes
       .$get({
         param: { id: podcast.id },
-        query: { limit: String(PAGE_SIZE), offset: "0", q: trimmedSearch },
+        query: {
+          limit: String(PAGE_SIZE),
+          offset: "0",
+          q: trimmedSearch,
+          ...(showArchived ? { includeArchived: "true" } : {}),
+        },
       })
       .then(async (res) => {
         const data = await res.json();
@@ -88,11 +146,13 @@ function PodcastDetail() {
     return () => {
       cancelled = true;
     };
-  }, [podcast.id, trimmedSearch, isSearching]);
+  }, [podcast.id, trimmedSearch, isSearching, showArchived]);
 
-  const browseEpisodes = [...firstPage, ...extraPages];
+  const page0 = page0Override?.episodes ?? firstPage;
+  const page0Total = page0Override?.total ?? total;
+  const browseEpisodes = [...page0, ...extraPages];
   const episodes = isSearching ? searchEpisodes : browseEpisodes;
-  const shownTotal = isSearching ? searchTotal : total;
+  const shownTotal = isSearching ? searchTotal : page0Total;
   const hasMore = episodes.length < shownTotal;
 
   async function loadMore() {
@@ -105,6 +165,7 @@ function PodcastDetail() {
           limit: String(PAGE_SIZE),
           offset: String(episodes.length),
           ...(isSearching ? { q: trimmedSearch } : {}),
+          ...(showArchived ? { includeArchived: "true" } : {}),
         },
       });
       const data = await res.json();
@@ -118,6 +179,58 @@ function PodcastDetail() {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingMore(false);
+    }
+  }
+
+  async function toggleArchive(ep: Episode) {
+    const next = !ep.archived;
+    setArchivePendingId(ep.id);
+    setArchiveError(null);
+    // Snapshot for rollback if the request fails.
+    const prevPage0 = page0Override;
+    const prevExtra = extraPages;
+    const prevSearch = searchEpisodes;
+    const prevSearchTotal = searchTotal;
+
+    if (next && !showArchived) {
+      // Archiving hides the row from the default list: drop it everywhere.
+      // page0 falls back to the loader's first page when no refetch ran yet.
+      setPage0Override((p) => {
+        const base = p ?? { episodes: firstPage, total };
+        return { episodes: base.episodes.filter((x) => x.id !== ep.id), total: base.total - 1 };
+      });
+      setExtraPages((prev) => prev.filter((x) => x.id !== ep.id));
+      setSearchEpisodes((prev) => prev.filter((x) => x.id !== ep.id));
+      if (isSearching) setSearchTotal((t) => t - 1);
+    } else {
+      // Archived rows stay visible (faded) while the toggle is on.
+      const mark = (list: Episode[]) =>
+        list.map((x) => (x.id === ep.id ? { ...x, archived: next } : x));
+      setPage0Override((p) => {
+        const base = p ?? { episodes: firstPage, total };
+        return { ...base, episodes: mark(base.episodes) };
+      });
+      setExtraPages(mark);
+      setSearchEpisodes(mark);
+    }
+
+    try {
+      const res = await api.api.episodes[":id"].archive.$patch({
+        param: { id: ep.id },
+        json: { archived: next },
+      });
+      const data = await res.json();
+      if (!res.ok || "error" in data) {
+        throw new Error("error" in data ? data.error : `Archive failed (${res.status})`);
+      }
+    } catch (err) {
+      setPage0Override(prevPage0);
+      setExtraPages(prevExtra);
+      setSearchEpisodes(prevSearch);
+      setSearchTotal(prevSearchTotal);
+      setArchiveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setArchivePendingId(null);
     }
   }
 
@@ -138,8 +251,12 @@ function PodcastDetail() {
         }
         hasMore={hasMore}
         loadingMore={loadingMore}
-        loadError={loadError ?? searchError}
+        loadError={loadError ?? searchError ?? archiveError}
         onLoadMore={loadMore}
+        onToggleArchive={toggleArchive}
+        archivePendingId={archivePendingId}
+        showArchived={showArchived}
+        onShowArchivedChange={setShowArchived}
       />
     </main>
   );

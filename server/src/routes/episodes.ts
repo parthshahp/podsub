@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
 
 import {
   episodeFromRow,
@@ -7,7 +8,9 @@ import {
   getTranscript,
   hasTranscript,
   podcastFromRow,
+  setEpisodeArchived,
 } from "../db/queries.js";
+import { ArchiveEpisodeInputSchema } from "@podsub/schemas";
 import { transcribeEpisode } from "../transcription/index.js";
 import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
 import {
@@ -144,4 +147,22 @@ export const episodeRoutes = new Hono()
     const transcript = getTranscript(c.req.param("id"));
     if (!transcript) return c.json({ error: "Not found" }, 404);
     return c.json(transcript);
-  });
+  })
+  // Archive (hide from the default episode list) or un-archive an episode.
+  .patch(
+    "/:id/archive",
+    zValidator("json", ArchiveEpisodeInputSchema, (result, c) => {
+      if (!result.success) {
+        return c.json({ error: "Expected body { archived: boolean }" }, 400);
+      }
+    }),
+    (c) => {
+      const id = c.req.param("id");
+      const row = getEpisodeWithPodcast(id);
+      if (!row) return c.json({ error: "Not found" }, 404);
+
+      const { archived } = c.req.valid("json");
+      setEpisodeArchived(id, archived);
+      return c.json(episodeFromRow({ ...row.episode, archived: archived ? 1 : 0 }));
+    },
+  );

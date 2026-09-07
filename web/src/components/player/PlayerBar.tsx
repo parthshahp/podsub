@@ -1,6 +1,6 @@
 import { formatClock } from "../../lib/format";
 import type { Episode } from "../../types";
-import { PauseIcon, PlayIcon, SyncIcon } from "../icons";
+import { PauseIcon, PlayIcon, SkipBack10Icon, SkipForward10Icon, SyncIcon } from "../icons";
 
 type PlayerBarProps = {
   episode: Episode;
@@ -33,8 +33,21 @@ export function PlayerBar({
   onSeek,
   onSync,
 }: PlayerBarProps) {
+  const seekBy = (delta: number) => {
+    const t = currentTime + delta;
+    onSeek(Math.min(Math.max(t, 0), max || t));
+  };
+
   return (
-    <footer aria-label="Playback controls" className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-3 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <footer aria-label="Playback controls" className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-x-3 sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <button
+        className="btn btn-circle btn-ghost min-h-11 min-w-11"
+        onClick={() => seekBy(-10)}
+        aria-label="Back 10 seconds"
+        title="Back 10 seconds"
+      >
+        <SkipBack10Icon className="h-6 w-6" />
+      </button>
       <button
         className="btn btn-circle btn-ghost min-h-11 min-w-11"
         onClick={onToggle}
@@ -42,6 +55,14 @@ export function PlayerBar({
         title="Play/pause (Space)"
       >
         {playing ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6" />}
+      </button>
+      <button
+        className="btn btn-circle btn-ghost min-h-11 min-w-11"
+        onClick={() => seekBy(10)}
+        aria-label="Forward 10 seconds"
+        title="Forward 10 seconds"
+      >
+        <SkipForward10Icon className="h-6 w-6" />
       </button>
       <div className="flex min-w-0 flex-1 basis-48 items-center gap-2 text-xs text-base-content/60 tabular-nums">
         <span className="shrink-0">{formatClock(currentTime)}</span>

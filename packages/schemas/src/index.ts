@@ -52,6 +52,8 @@ export const EpisodeSchema = z.object({
   durationSec: z.number().nullable(),
   publishedAt: z.iso.datetime().nullable(),
   episodeType: z.enum(["full", "trailer", "bonus"]).nullable(),
+  /** True when the user archived the episode (hidden from the default list). */
+  archived: z.boolean(),
 });
 
 /** Query params for paginated episode lists (?limit=50&offset=0&q=…). */
@@ -60,6 +62,8 @@ export const ListEpisodesQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   /** Case-insensitive title filter; empty means no filtering. */
   q: z.string().trim().max(200).optional().default(""),
+  /** When true, archived episodes are included; otherwise they are hidden. */
+  includeArchived: z.coerce.boolean().optional().default(false),
 });
 
 export const EpisodeListSchema = z.object({
@@ -76,6 +80,11 @@ export const PodcastDetailSchema = z.object({
   total: z.number().int(),
   limit: z.number().int(),
   offset: z.number().int(),
+});
+
+/** Body for PATCH /api/episodes/:id/archive — archive or un-archive. */
+export const ArchiveEpisodeInputSchema = z.object({
+  archived: z.boolean(),
 });
 
 /** GET /api/episodes/:id — episode with parent podcast and transcript state. */
@@ -121,6 +130,7 @@ export type Podcast = z.infer<typeof PodcastSchema>;
 export type PodcastList = z.infer<typeof PodcastListSchema>;
 export type Episode = z.infer<typeof EpisodeSchema>;
 export type EpisodeDetail = z.infer<typeof EpisodeDetailSchema>;
+export type ArchiveEpisodeInput = z.infer<typeof ArchiveEpisodeInputSchema>;
 export type ListEpisodesQuery = z.infer<typeof ListEpisodesQuerySchema>;
 export type EpisodeList = z.infer<typeof EpisodeListSchema>;
 export type PodcastDetail = z.infer<typeof PodcastDetailSchema>;

@@ -27,6 +27,7 @@ export type EpisodeRow = {
   duration_sec: number | null;
   published_at: number | null;
   episode_type: string | null;
+  archived: 0 | 1;
   created_at: number;
 };
 
@@ -60,6 +61,13 @@ const getPodcastStmt = db.prepare(`
 `);
 
 const listEpisodesStmt = db.prepare(`
+  SELECT * FROM podcast_episode
+  WHERE podcast_id = @podcastId AND archived = 0
+  ORDER BY published_at DESC, created_at DESC
+  LIMIT @limit OFFSET @offset
+`);
+
+const listEpisodesAllStmt = db.prepare(`
   SELECT * FROM podcast_episode WHERE podcast_id = @podcastId
   ORDER BY published_at DESC, created_at DESC
   LIMIT @limit OFFSET @offset
@@ -67,16 +75,32 @@ const listEpisodesStmt = db.prepare(`
 
 const listEpisodesSearchStmt = db.prepare(`
   SELECT * FROM podcast_episode
+  WHERE podcast_id = @podcastId AND archived = 0 AND title LIKE @like ESCAPE '\\' COLLATE NOCASE
+  ORDER BY published_at DESC, created_at DESC
+  LIMIT @limit OFFSET @offset
+`);
+
+const listEpisodesSearchAllStmt = db.prepare(`
+  SELECT * FROM podcast_episode
   WHERE podcast_id = @podcastId AND title LIKE @like ESCAPE '\\' COLLATE NOCASE
   ORDER BY published_at DESC, created_at DESC
   LIMIT @limit OFFSET @offset
 `);
 
 const countEpisodesStmt = db.prepare(`
+  SELECT count(*) AS count FROM podcast_episode WHERE podcast_id = ? AND archived = 0
+`);
+
+const countEpisodesAllStmt = db.prepare(`
   SELECT count(*) AS count FROM podcast_episode WHERE podcast_id = ?
 `);
 
 const countEpisodesSearchStmt = db.prepare(`
+  SELECT count(*) AS count FROM podcast_episode
+  WHERE podcast_id = ? AND archived = 0 AND title LIKE ? ESCAPE '\\' COLLATE NOCASE
+`);
+
+const countEpisodesSearchAllStmt = db.prepare(`
   SELECT count(*) AS count FROM podcast_episode
   WHERE podcast_id = ? AND title LIKE ? ESCAPE '\\' COLLATE NOCASE
 `);
@@ -168,21 +192,33 @@ export function getEpisodeWithPodcast(
 
 export function listEpisodesForPodcast(
   podcastId: string,
-  { limit, offset, q }: { limit: number; offset: number; q?: string },
+  { limit, offset, q, includeArchived }: { limit: number; offset: number; q?: string; includeArchived?: boolean },
 ): { rows: EpisodeRow[]; total: number } {
   const needle = q?.trim() ?? "";
   if (needle === "") {
-    const rows = listEpisodesStmt.all({ podcastId, limit, offset }) as EpisodeRow[];
-    const { count } = countEpisodesStmt.get(podcastId) as { count: number };
+    const stmt = includeArchived ? listEpisodesAllStmt : listEpisodesStmt;
+    const counter = includeArchived ? countEpisodesAllStmt : countEpisodesStmt;
+    const rows = stmt.all({ podcastId, limit, offset }) as EpisodeRow[];
+    const { count } = counter.get(podcastId) as { count: number };
     return { rows, total: count };
   }
   // Escape LIKE metacharacters for a literal substring match.
   const like = `%${needle.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
-  const rows = listEpisodesSearchStmt.all({ podcastId, like, limit, offset }) as EpisodeRow[];
-  const { count } = countEpisodesSearchStmt.get(podcastId, like) as { count: number };
+  const stmt = includeArchived ? listEpisodesSearchAllStmt : listEpisodesSearchStmt;
+  const counter = includeArchived ? countEpisodesSearchAllStmt : countEpisodesSearchStmt;
+  const rows = stmt.all({ podcastId, like, limit, offset }) as EpisodeRow[];
+  const { count } = counter.get(podcastId, like) as { count: number };
   return { rows, total: count };
 }
 
+const setEpisodeArchivedStmt = db.prepare(`
+  UPDATE podcast_episode SET archived = ? WHERE id = ?
+`);
+
+/** Archive (hide) or un-archive an episode. Returns false when not found. */
+export function setEpisodeArchived(id: string, archived: boolean): boolean {
+  return setEpisodeArchivedStmt.run(archived ? 1 : 0, id).changes > 0;
+}
 // SQLite treats NULLs as distinct, so the unique index uses COALESCE(language, '')
 // to keep re-runs with an undetected language updating in place.
 const upsertTranscriptStmt = db.prepare(`
@@ -210,7 +246,7 @@ export function upsertPodcast(input: PodcastInput): PodcastRow {
   }) as PodcastRow;
 }
 
-export type EpisodeInput = Omit<EpisodeRow, "id" | "podcast_id" | "created_at"> & {
+export type EpisodeInput = Omit<EpisodeRow, "id" | "podcast_id" | "created_at" | "archived"> & {
   podcast_id: string;
 };
 
@@ -258,6 +294,7 @@ export function episodeFromRow(row: EpisodeRow): Episode {
     durationSec: row.duration_sec,
     publishedAt: row.published_at == null ? null : new Date(row.published_at * 1000).toISOString(),
     episodeType: row.episode_type as Episode["episodeType"],
+    archived: row.archived === 1,
   };
 }
 
