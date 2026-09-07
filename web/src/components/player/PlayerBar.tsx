@@ -15,8 +15,12 @@ type PlayerBarProps = {
 };
 
 /**
- * Bottom playback bar. Wraps on narrow screens so play + slider + times
- * stay usable one-handed, with the Anki sync action trailing.
+ * Bottom playback bar. Sticky + elevated above the transcript pane so it
+ * stays tappable at the viewport bottom on mobile (the transcript wrapper
+ * is positioned, so without a z-index it would paint over this bar).
+ * Wraps on narrow screens so play + slider + times stay usable one-handed,
+ * with the Anki sync action trailing. Bottom padding respects the iOS home
+ * indicator safe area.
  */
 export function PlayerBar({
   episode,
@@ -30,7 +34,7 @@ export function PlayerBar({
   onSync,
 }: PlayerBarProps) {
   return (
-    <footer className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-base-300 bg-base-100 px-3 py-2 sm:px-6 sm:py-3">
+    <footer className="sticky bottom-0 z-30 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <button
         className="btn btn-circle btn-ghost min-h-11 min-w-11"
         onClick={onToggle}

@@ -7,9 +7,9 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import type { Context } from "hono";
 
-import { AUDIO_CACHE_TTL_MS, PODCASTS_DIR } from "../config";
-import type { EpisodeRow } from "../db/queries";
-import { cappedBodyStream, safeFetch } from "./safe-fetch";
+import { AUDIO_CACHE_TTL_MS, PODCASTS_DIR } from "../config.js";
+import type { EpisodeRow } from "../db/queries.js";
+import { cappedBodyStream, safeFetch } from "./safe-fetch.js";
 
 // Extension only matters for naming; chunking re-encodes to mp3 and the audio
 // endpoint maps extensions back to MIME types.

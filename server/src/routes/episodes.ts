@@ -7,16 +7,16 @@ import {
   getTranscript,
   hasTranscript,
   podcastFromRow,
-} from "../db/queries";
-import { transcribeEpisode } from "../transcription";
-import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip";
+} from "../db/queries.js";
+import { transcribeEpisode } from "../transcription/index.js";
+import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
 import {
   proxyUpstreamAudio,
   releaseAudio,
   resolveCachedAudio,
   retainAudio,
   serveCachedAudio,
-} from "../lib/audio-cache";
+} from "../lib/audio-cache.js";
 import type { EpisodeDetail } from "@podsub/schemas";
 
 // In-memory job registry, keyed by episode id; resets on server restart.

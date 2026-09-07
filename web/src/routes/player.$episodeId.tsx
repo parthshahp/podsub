@@ -102,13 +102,13 @@ function EpisodePage() {
   // so the transcript and player bar stay reachable one-handed; the
   // viewport-locked column keeps the player bar visible without scrolling.
   return (
-    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden">
       {audioElement}
       <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col md:flex-row">
         <EpisodeSidebar podcast={podcast} episode={episode} slug={slug} />
 
         {transcript ? (
-          <div className="relative min-w-0 flex-1">
+          <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
             <TranscriptPane
               lines={lines}
               activeIdx={activeIdx}

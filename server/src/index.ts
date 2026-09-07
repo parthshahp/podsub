@@ -1,8 +1,8 @@
 import { serve } from "@hono/node-server";
 
-import app from "./app";
-import { AUDIO_CACHE_SWEEP_MS } from "./config";
-import { sweepAudioCache } from "./lib/audio-cache";
+import app from "./app.js";
+import { AUDIO_CACHE_SWEEP_MS } from "./config.js";
+import { sweepAudioCache } from "./lib/audio-cache.js";
 
 async function runAudioSweep(reason: string): Promise<void> {
   try {
@@ -25,7 +25,7 @@ void runAudioSweep("startup");
 serve(
   {
     fetch: app.fetch,
-    port: 3000,
+    port: Number(process.env.PORT ?? 3000),
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);

@@ -1,9 +1,9 @@
 import Parser from "rss-parser";
 
-import { db } from "../db";
-import { podcastFromRow, upsertEpisode, upsertPodcast, type EpisodeInput } from "../db/queries";
+import { db } from "../db/index.js";
+import { podcastFromRow, upsertEpisode, upsertPodcast, type EpisodeInput } from "../db/queries.js";
 import type { Podcast } from "@podsub/schemas";
-import { readBodyCapped, safeFetch } from "../lib/safe-fetch";
+import { readBodyCapped, safeFetch } from "../lib/safe-fetch.js";
 
 // rss-parser maps itunes:* tags automatically; podcast:* needs explicit
 // customFields, which also forces the narrow TS generics.

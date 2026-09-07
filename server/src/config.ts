@@ -6,6 +6,9 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 // Where downloaded episode audio is cached (keyed by episode id).
 export const PODCASTS_DIR = path.join(ROOT, "podcasts");
 
+// Built web UI (Vite output). Absent until `pnpm build` runs.
+export const WEB_DIST_DIR = path.join(ROOT, "web", "dist");
+
 export const MODEL = "microsoft/mai-transcribe-2";
 
 // Long audio times out upstream, so split before sending.

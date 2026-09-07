@@ -5,16 +5,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { CHUNK_SECONDS, MAX_LINE_SECONDS, MODEL } from "../config";
+import { CHUNK_SECONDS, MAX_LINE_SECONDS, MODEL } from "../config.js";
 import {
   audioFileFor,
   ensurePodcastsDir,
   pipeToFileAtomically,
   releaseAudio,
   retainAudio,
-} from "../lib/audio-cache";
-import { safeFetch } from "../lib/safe-fetch";
-import { saveTranscript, type EpisodeRow } from "../db/queries";
+} from "../lib/audio-cache.js";
+import { safeFetch } from "../lib/safe-fetch.js";
+import { saveTranscript, type EpisodeRow } from "../db/queries.js";
 
 const execFileP = promisify(execFile);
 

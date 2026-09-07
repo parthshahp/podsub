@@ -1,5 +1,5 @@
-import { db } from "./index";
-import { appendWordToLine, groupWordsIntoLines } from "../transcription";
+import { db } from "./index.js";
+import { appendWordToLine, groupWordsIntoLines } from "../transcription/index.js";
 import type { Episode, Podcast, PodcastList, Transcript, Word } from "@podsub/schemas";
 
 export type PodcastRow = {

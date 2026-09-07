@@ -10,6 +10,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    host: true, // expose on 0.0.0.0 for Tailscale access
     proxy: {
       // Forward backend requests to Hono during development.
       "/api": "http://localhost:3000",

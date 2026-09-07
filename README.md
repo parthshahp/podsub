@@ -36,9 +36,23 @@ Open http://localhost:5173 (Vite proxies `/api` and `/p` to the backend on :3000
 ```
 pnpm lint        # oxlint
 pnpm fmt         # oxfmt
-pnpm typecheck   # tsc in both packages
-pnpm build       # build both packages
+pnpm typecheck   # tsc in all packages
+pnpm build       # build all packages
 ```
+
+## Production (self-host)
+
+```
+pnpm install
+pnpm --filter @podsub/server build:dict  # one-time dictionary build
+pnpm build
+PORT=3000 node server/dist/index.js
+```
+
+The backend serves the built UI itself on `:$PORT` (default 3000), so one
+process is all you need — expose it on your LAN directly or put a reverse
+proxy in front. Persist `server/data/` (SQLite) and `podcasts/` (audio
+cache) across restarts.
 
 ## Dictionary
 

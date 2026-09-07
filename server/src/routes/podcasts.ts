@@ -7,11 +7,11 @@ import {
   listEpisodesForPodcast,
   listPodcasts,
   podcastFromRow,
-} from "../db/queries";
-import { importFeed } from "../feeds/importer";
+} from "../db/queries.js";
+import { importFeed } from "../feeds/importer.js";
 import { CreatePodcastInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
 import type { PodcastDetail } from "@podsub/schemas";
-import { cappedBodyStream, safeFetch } from "../lib/safe-fetch";
+import { cappedBodyStream, safeFetch } from "../lib/safe-fetch.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 

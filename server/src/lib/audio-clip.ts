@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import type { EpisodeRow } from "../db/queries";
+import type { EpisodeRow } from "../db/queries.js";
 import {
   audioFileFor,
   ensurePodcastsDir,
@@ -10,8 +10,8 @@ import {
   resolveCachedAudio,
   retainAudio,
   type CachedAudio,
-} from "./audio-cache";
-import { safeFetch } from "./safe-fetch";
+} from "./audio-cache.js";
+import { safeFetch } from "./safe-fetch.js";
 
 const execFileP = promisify(execFile);
 
