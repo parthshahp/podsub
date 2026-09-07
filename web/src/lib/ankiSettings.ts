@@ -25,10 +25,7 @@ export const SOURCE_LABELS: Record<CardSource, string> = {
   image: "Podcast image (<img> HTML)",
 };
 
-export const DEFAULT_URL = "http://127.0.0.1:8765";
-
 export type AnkiSettings = {
-  url: string;
   deck: string;
   noteType: string;
   /** Anki note field name → card source; unmapped fields are omitted. */
@@ -39,7 +36,6 @@ const STORAGE_KEY = "ankiSettings";
 
 export function loadAnkiSettings(): AnkiSettings {
   const defaults: AnkiSettings = {
-    url: DEFAULT_URL,
     deck: "",
     noteType: "",
     mappings: {},
@@ -47,9 +43,9 @@ export function loadAnkiSettings(): AnkiSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults;
+    // Tolerates the older shape, which included a `url` field.
     const parsed = JSON.parse(raw) as Partial<AnkiSettings>;
     return {
-      url: parsed.url || defaults.url,
       deck: parsed.deck ?? "",
       noteType: parsed.noteType ?? "",
       mappings: parsed.mappings ?? {},

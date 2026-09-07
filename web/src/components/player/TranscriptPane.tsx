@@ -7,12 +7,10 @@ import { TranscriptLine } from "./TranscriptLine";
 type TranscriptPaneProps = {
   lines: TranscriptLineData[];
   activeIdx: number;
-  exporting: boolean;
   follow: boolean;
   dialogKey: string | null;
   containerRef: RefObject<HTMLDivElement | null>;
   onSeekLine: (start: number) => void;
-  onExportLine: (index: number) => void;
   onWordEnter: (info: WordHoverInfo) => void;
   onWordLeave: () => void;
   onWordActivate: (info: WordHoverInfo) => void;
@@ -33,12 +31,10 @@ type TranscriptPaneProps = {
 export function TranscriptPane({
   lines,
   activeIdx,
-  exporting,
   follow,
   dialogKey,
   containerRef,
   onSeekLine,
-  onExportLine,
   onWordEnter,
   onWordLeave,
   onWordActivate,
@@ -63,10 +59,8 @@ export function TranscriptPane({
             line={line}
             index={i}
             isActive={i === activeIdx}
-            exportDisabled={exporting}
             dialogKey={dialogKey}
             onSeek={onSeekLine}
-            onExportLine={onExportLine}
             onWordEnter={onWordEnter}
             onWordLeave={onWordLeave}
             onWordActivate={onWordActivate}

@@ -112,12 +112,10 @@ function EpisodePage() {
             <TranscriptPane
               lines={lines}
               activeIdx={activeIdx}
-              exporting={anki.exporting}
               follow={follow}
               dialogKey={dialogKey}
               containerRef={containerRef}
               onSeekLine={handleSeekLine}
-              onExportLine={anki.handleExportLine}
               onWordEnter={handleWordEnter}
               onWordLeave={handleWordLeave}
               onWordActivate={openWord}

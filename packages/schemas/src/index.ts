@@ -94,6 +94,27 @@ export const CreatePodcastInputSchema = z.object({
   feedUrl: z.string().trim().pipe(z.url()),
 });
 
+/**
+ * Actions the same-origin Anki proxy (/api/anki) is allowed to forward.
+ * Covers everything the client needs; anything else is rejected so the
+ * proxy can't be used to drive arbitrary AnkiConnect behavior.
+ */
+export const ANKI_ACTIONS = [
+  "version",
+  "deckNames",
+  "modelNames",
+  "modelFieldNames",
+  "addNotes",
+  "sync",
+] as const;
+
+/** Body for POST /api/anki — forwarded to AnkiConnect server-side. */
+export const AnkiProxyInputSchema = z.object({
+  action: z.enum(ANKI_ACTIONS),
+  version: z.number().int().min(1).max(100).default(6),
+  params: z.record(z.string(), z.unknown()).default({}),
+});
+
 export type Word = z.infer<typeof WordSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Podcast = z.infer<typeof PodcastSchema>;
@@ -104,3 +125,5 @@ export type ListEpisodesQuery = z.infer<typeof ListEpisodesQuerySchema>;
 export type EpisodeList = z.infer<typeof EpisodeListSchema>;
 export type PodcastDetail = z.infer<typeof PodcastDetailSchema>;
 export type CreatePodcastInput = z.infer<typeof CreatePodcastInputSchema>;
+export type AnkiAction = (typeof ANKI_ACTIONS)[number];
+export type AnkiProxyInput = z.infer<typeof AnkiProxyInputSchema>;

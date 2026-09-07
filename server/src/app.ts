@@ -5,10 +5,14 @@ import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
 
 import { WEB_DIST_DIR } from "./config.js";
+import { ankiRoutes } from "./routes/anki.js";
 import { podcastRoutes } from "./routes/podcasts.js";
 import { episodeRoutes } from "./routes/episodes.js";
 
-const app = new Hono().route("/api/podcasts", podcastRoutes).route("/api/episodes", episodeRoutes);
+const app = new Hono()
+  .route("/api/podcasts", podcastRoutes)
+  .route("/api/episodes", episodeRoutes)
+  .route("/api/anki", ankiRoutes);
 
 // Serve the built SPA (web/dist) when present. In dev the Vite server owns
 // the UI on :5173, so this is skipped until `pnpm build` has run.

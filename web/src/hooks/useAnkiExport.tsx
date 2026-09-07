@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 
-import { addNotes, getVersion, syncAnkiWeb, type AnkiNote } from "../lib/anki";
+import { addNotes, getVersion, syncAnkiWeb } from "../lib/anki";
 import { buildCardData, buildNote, isConfigured } from "../lib/ankiExport";
 import { loadAnkiSettings } from "../lib/ankiSettings";
 import { blobToBase64, loadAudioClip } from "../lib/audioClip";
@@ -32,7 +32,6 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ankiConnected, setAnkiConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [exporting, setExporting] = useState(false);
   /** Headword of the word card currently being exported, if any. */
   const [sendingWord, setSendingWord] = useState<string | null>(null);
 
@@ -48,7 +47,7 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
     const settings = loadAnkiSettings();
     if (!isConfigured(settings)) return;
     let cancelled = false;
-    getVersion(settings.url)
+    getVersion()
       .then(() => {
         if (!cancelled) setAnkiConnected(true);
       })
@@ -85,7 +84,7 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
     if (!isConfigured(settings)) return;
     setSyncing(true);
     try {
-      await syncAnkiWeb(settings.url);
+      await syncAnkiWeb();
       showStatus("success", "Anki collection synced");
     } catch (err) {
       showStatus("error", err instanceof Error ? err.message : String(err));
@@ -93,79 +92,6 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
       setSyncing(false);
     }
   }, [showStatus]);
-
-  /** Send the given transcript lines to Anki as notes via AnkiConnect. */
-  const exportLines = useCallback(
-    async (indices: number[]) => {
-      const settings = loadAnkiSettings();
-      if (!isConfigured(settings)) {
-        showUnconfigured();
-        return;
-      }
-      // Only fetch media that's actually mapped to a field.
-      const includeAudio = Object.values(settings.mappings).includes("audio");
-      setExporting(true);
-      try {
-        // Each clip is one small server-side slice, so timing stays flat.
-        const audioT0 = performance.now();
-        const notes: AnkiNote[] = [];
-        for (const i of indices) {
-          const filename = includeAudio
-            ? `${slug}-${episode.id}-${lines[i].start.toFixed(2)}.mp3`
-            : undefined;
-          const note = buildNote(
-            settings,
-            buildCardData({
-              lineText: lines[i].text,
-              lineStart: lines[i].start,
-              podcastTitle: podcast.title,
-              episodeTitle: episode.title,
-              audio: filename && `[sound:${filename}]`,
-            }),
-          );
-          if (filename) {
-            const clip = await loadAudioClip(
-              episode.id,
-              lines[i].start,
-              lineEndSec(i, lines, words),
-            );
-            note.audio = [{ data: await blobToBase64(clip), filename }];
-          }
-          notes.push(note);
-        }
-        const audioSecs = (performance.now() - audioT0) / 1000;
-        const audioInfo = includeAudio
-          ? ` · audio prepared in ${
-              audioSecs < 1 ? `${Math.round(audioSecs * 1000)} ms` : `${audioSecs.toFixed(1)} s`
-            }`
-          : "";
-        const results = await addNotes(settings.url, notes);
-        const added = results.filter((r) => r !== null).length;
-        const skipped = results.length - added;
-        const noun = `card${added === 1 ? "" : "s"}`;
-        if (added === 0) {
-          showStatus(
-            "error",
-            skipped === 1
-              ? `Card not added — it may already exist in your collection, or its first field is empty.${audioInfo}`
-              : `No cards added — ${skipped} skipped (duplicates, or empty first field).${audioInfo}`,
-          );
-        } else {
-          showStatus(
-            "success",
-            skipped > 0
-              ? `${added} ${noun} sent · ${skipped} skipped (already in collection?)${audioInfo}`
-              : `${added} ${noun} sent to Anki${audioInfo}`,
-          );
-        }
-      } catch (err) {
-        showStatus("error", err instanceof Error ? err.message : String(err));
-      } finally {
-        setExporting(false);
-      }
-    },
-    [episode.id, episode.title, lines, words, podcast.title, slug, showStatus, showUnconfigured],
-  );
 
   /** Send the hovered word's card to Anki; resolves true when added. */
   const exportWord = useCallback(
@@ -226,7 +152,7 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
               }`
             : "";
 
-        const results = await addNotes(settings.url, [note]);
+        const results = await addNotes([note]);
         if (results[0] === null) {
           showStatus(
             "error",
@@ -257,22 +183,12 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
     ],
   );
 
-  // Route through a ref so the row callback stays stable across renders.
-  const exportLinesRef = useRef(exportLines);
-  exportLinesRef.current = exportLines;
-  const handleExportLine = useCallback((index: number) => {
-    void exportLinesRef.current([index]);
-  }, []);
-
   return {
     status,
     ankiConnected,
     syncing,
-    exporting,
     sendingWord,
     syncAnki,
-    exportLines,
     exportWord,
-    handleExportLine,
   };
 }

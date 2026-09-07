@@ -2,18 +2,15 @@ import { memo } from "react";
 
 import { formatClock } from "../../lib/format";
 import type { TranscriptLineData } from "../../lib/transcriptView";
-import { PlusIcon } from "../icons";
 import { WordSpans, type WordHoverInfo } from "../WordSpans";
 
 type TranscriptLineProps = {
   line: TranscriptLineData;
   index: number;
   isActive: boolean;
-  exportDisabled: boolean;
   /** `${lineIndex}:${start}` key of the word whose dialog is open, if any. */
   dialogKey?: string | null;
   onSeek: (start: number) => void;
-  onExportLine: (index: number) => void;
   onWordEnter: (info: WordHoverInfo) => void;
   onWordLeave: () => void;
   onWordActivate: (info: WordHoverInfo) => void;
@@ -24,17 +21,15 @@ type TranscriptLineProps = {
  *
  * Seeking: clicking anywhere on the row (outside a button) seeks, and the
  * timestamp is a real button so keyboard users can seek too. Dictionary word
- * buttons and the Anki button are siblings — never nested — so each is
- * independently reachable by keyboard, mouse, and touch.
+ * buttons are siblings — never nested — so each is independently
+ * reachable by keyboard, mouse, and touch.
  */
 export const TranscriptLine = memo(function TranscriptLine({
   line,
   index,
   isActive,
-  exportDisabled,
   dialogKey,
   onSeek,
-  onExportLine,
   onWordEnter,
   onWordLeave,
   onWordActivate,
@@ -72,16 +67,6 @@ export const TranscriptLine = memo(function TranscriptLine({
           onWordActivate={onWordActivate}
         />
       </span>
-      <button
-        type="button"
-        className="btn btn-ghost btn-circle h-11 w-11 shrink-0 opacity-100 md:h-7 md:w-7 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-        aria-label={`Send line at ${timeLabel} to Anki`}
-        title="Send to Anki"
-        disabled={exportDisabled}
-        onClick={() => onExportLine(index)}
-      >
-        <PlusIcon className="h-4 w-4" />
-      </button>
     </div>
   );
 });

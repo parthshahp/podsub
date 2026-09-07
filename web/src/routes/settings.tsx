@@ -21,7 +21,6 @@ type Connection = {
 };
 
 function SettingsPage() {
-  const [url, setUrl] = useState(loadAnkiSettings().url);
   const [connection, setConnection] = useState<Connection>({ status: "idle", message: null });
 
   const [decks, setDecks] = useState<string[]>([]);
@@ -34,23 +33,23 @@ function SettingsPage() {
   const [justSaved, setJustSaved] = useState(false);
 
   // Ref so connect() reads latest state without re-creating on each keystroke.
-  const stateRef = useRef({ url, deck, noteType, mappings });
-  stateRef.current = { url, deck, noteType, mappings };
+  const stateRef = useRef({ deck, noteType, mappings });
+  stateRef.current = { deck, noteType, mappings };
 
   useEffect(() => {
     const saved = loadAnkiSettings();
-    void connect(saved.url, saved);
+    void connect(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Test the connection; pass `saved` to restore a previous selection. */
-  async function connect(targetUrl: string, saved: AnkiSettings | null) {
+  async function connect(saved: AnkiSettings | null) {
     setConnection({ status: "testing", message: null });
     try {
-      const version = await getVersion(targetUrl);
+      const version = await getVersion();
       const [fetchedDecks, fetchedNoteTypes] = await Promise.all([
-        getDeckNames(targetUrl),
-        getModelNames(targetUrl),
+        getDeckNames(),
+        getModelNames(),
       ]);
       setDecks(fetchedDecks);
       setNoteTypes(fetchedNoteTypes);
@@ -65,7 +64,7 @@ function SettingsPage() {
         setDeck(restoredDeck);
         setNoteType(restoredNoteType);
         if (restoredNoteType) {
-          await loadFields(targetUrl, restoredNoteType, saved.mappings);
+          await loadFields(restoredNoteType, saved.mappings);
         }
       } else {
         // Manual re-test: keep selections that still exist.
@@ -76,7 +75,7 @@ function SettingsPage() {
         } = stateRef.current;
         if (currentDeck && !fetchedDecks.includes(currentDeck)) setDeck("");
         if (currentNoteType && fetchedNoteTypes.includes(currentNoteType)) {
-          await loadFields(targetUrl, currentNoteType, currentMappings);
+          await loadFields(currentNoteType, currentMappings);
         } else {
           setNoteType("");
           setFields([]);
@@ -88,13 +87,12 @@ function SettingsPage() {
   }
 
   async function loadFields(
-    targetUrl: string,
     targetNoteType: string,
     keepMappings: Record<string, CardSource>,
   ) {
     setLoadingFields(true);
     try {
-      const names = await getModelFieldNames(targetUrl, targetNoteType);
+      const names = await getModelFieldNames(targetNoteType);
       setFields(names);
       // Keep only mappings whose field still exists.
       setMappings(
@@ -115,12 +113,6 @@ function SettingsPage() {
     }
   }
 
-  function handleUrlChange(nextUrl: string) {
-    setUrl(nextUrl);
-    // Edits invalidate the connection; require an explicit re-test.
-    setConnection({ status: "idle", message: null });
-  }
-
   function handleDeckChange(nextDeck: string) {
     setDeck(nextDeck);
     setNoteType("");
@@ -132,7 +124,7 @@ function SettingsPage() {
     setNoteType(nextNoteType);
     setFields([]);
     setMappings({});
-    if (nextNoteType) void loadFields(stateRef.current.url, nextNoteType, {});
+    if (nextNoteType) void loadFields(nextNoteType, {});
   }
 
   const connected = connection.status === "ok";
@@ -140,7 +132,7 @@ function SettingsPage() {
   const canSave = connected && deck !== "" && noteType !== "" && !loadingFields && hasMapping;
 
   function handleSave() {
-    saveAnkiSettings({ url: stateRef.current.url, deck, noteType, mappings });
+    saveAnkiSettings({ deck, noteType, mappings });
     setJustSaved(true);
     setTimeout(() => setJustSaved(false), 2000);
   }
@@ -158,37 +150,31 @@ function SettingsPage() {
           </p>
         </div>
 
-        {/* 1. AnkiConnect URL */}
+        {/* 1. Connection — same-origin proxy, server dials ANKI_CONNECT_URL */}
         <div className="space-y-2">
-          <label className="label" htmlFor="anki-url">
-            1. AnkiConnect URL
-          </label>
-          <div className="join w-full">
-            <input
-              id="anki-url"
-              type="url"
-              placeholder="http://127.0.0.1:8765"
-              value={url}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              className="input join-item min-w-0 grow"
-            />
+          <span className="label">1. Connection</span>
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              className="btn join-item"
-              disabled={connection.status === "testing" || url.trim() === ""}
-              onClick={() => void connect(url, null)}
+              className="btn"
+              disabled={connection.status === "testing"}
+              onClick={() => void connect(null)}
             >
               {connection.status === "testing" && (
                 <span className="loading loading-spinner loading-sm" />
               )}
-              Test
+              Test connection
             </button>
+            {connection.message && (
+              <p className={`text-sm ${connected ? "text-success" : "text-error"}`}>
+                {connection.message}
+              </p>
+            )}
           </div>
-          {connection.message && (
-            <p className={`text-sm ${connected ? "text-success" : "text-error"}`}>
-              {connection.message}
-            </p>
-          )}
+          <p className="text-sm text-base-content/60">
+            Proxied through the podsub server (same origin, so no CORS issues). The server
+            connects to the Anki host in its ANKI_CONNECT_URL — no URL to configure here.
+          </p>
         </div>
 
         {/* 2. Deck */}
