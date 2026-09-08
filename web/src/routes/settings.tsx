@@ -47,10 +47,7 @@ function SettingsPage() {
     setConnection({ status: "testing", message: null });
     try {
       const version = await getVersion();
-      const [fetchedDecks, fetchedNoteTypes] = await Promise.all([
-        getDeckNames(),
-        getModelNames(),
-      ]);
+      const [fetchedDecks, fetchedNoteTypes] = await Promise.all([getDeckNames(), getModelNames()]);
       setDecks(fetchedDecks);
       setNoteTypes(fetchedNoteTypes);
       setConnection({ status: "ok", message: `Connected — AnkiConnect v${version}` });
@@ -86,10 +83,7 @@ function SettingsPage() {
     }
   }
 
-  async function loadFields(
-    targetNoteType: string,
-    keepMappings: Record<string, CardSource>,
-  ) {
+  async function loadFields(targetNoteType: string, keepMappings: Record<string, CardSource>) {
     setLoadingFields(true);
     try {
       const names = await getModelFieldNames(targetNoteType);
@@ -171,10 +165,6 @@ function SettingsPage() {
               </p>
             )}
           </div>
-          <p className="text-sm text-base-content/60">
-            Proxied through the podsub server (same origin, so no CORS issues). The server
-            connects to the Anki host in its ANKI_CONNECT_URL — no URL to configure here.
-          </p>
         </div>
 
         {/* 2. Deck */}
