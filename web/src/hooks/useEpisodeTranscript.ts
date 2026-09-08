@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
+import { requestTranscription } from "../lib/transcribe";
 import type { EpisodeDetail, Transcript } from "../types";
 
 /** Loader result for the player route: episode detail plus the transcript once loaded. */
@@ -50,11 +51,7 @@ export function useEpisodeTranscript(initial: EpisodeLoaderData) {
     setPostError(null);
     setStarting(true);
     try {
-      const res = await api.api.episodes[":id"].transcribe.$post({ param: { id: episode.id } });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error("error" in data ? data.error : "Failed to start transcription");
-      }
+      await requestTranscription(episode.id);
       setState((prev) => ({
         ...prev,
         transcribeStatus: "running" as const,

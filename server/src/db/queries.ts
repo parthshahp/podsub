@@ -16,6 +16,10 @@ export type PodcastRow = {
   updated_at: number;
 };
 
+// List queries below add `has_transcript` via a correlated EXISTS
+// (backed by idx_transcript_episode) — no extra round-trip per row.
+export type EpisodeListRow = EpisodeRow & { has_transcript: 0 | 1 };
+
 export type EpisodeRow = {
   id: string;
   podcast_id: string;
@@ -61,27 +65,31 @@ const getPodcastStmt = db.prepare(`
 `);
 
 const listEpisodesStmt = db.prepare(`
-  SELECT * FROM podcast_episode
+  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
+  FROM podcast_episode
   WHERE podcast_id = @podcastId AND archived = 0
   ORDER BY published_at DESC, created_at DESC
   LIMIT @limit OFFSET @offset
 `);
 
 const listEpisodesAllStmt = db.prepare(`
-  SELECT * FROM podcast_episode WHERE podcast_id = @podcastId
+  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
+  FROM podcast_episode WHERE podcast_id = @podcastId
   ORDER BY published_at DESC, created_at DESC
   LIMIT @limit OFFSET @offset
 `);
 
 const listEpisodesSearchStmt = db.prepare(`
-  SELECT * FROM podcast_episode
+  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
+  FROM podcast_episode
   WHERE podcast_id = @podcastId AND archived = 0 AND title LIKE @like ESCAPE '\\' COLLATE NOCASE
   ORDER BY published_at DESC, created_at DESC
   LIMIT @limit OFFSET @offset
 `);
 
 const listEpisodesSearchAllStmt = db.prepare(`
-  SELECT * FROM podcast_episode
+  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
+  FROM podcast_episode
   WHERE podcast_id = @podcastId AND title LIKE @like ESCAPE '\\' COLLATE NOCASE
   ORDER BY published_at DESC, created_at DESC
   LIMIT @limit OFFSET @offset
@@ -192,13 +200,18 @@ export function getEpisodeWithPodcast(
 
 export function listEpisodesForPodcast(
   podcastId: string,
-  { limit, offset, q, includeArchived }: { limit: number; offset: number; q?: string; includeArchived?: boolean },
-): { rows: EpisodeRow[]; total: number } {
+  {
+    limit,
+    offset,
+    q,
+    includeArchived,
+  }: { limit: number; offset: number; q?: string; includeArchived?: boolean },
+): { rows: EpisodeListRow[]; total: number } {
   const needle = q?.trim() ?? "";
   if (needle === "") {
     const stmt = includeArchived ? listEpisodesAllStmt : listEpisodesStmt;
     const counter = includeArchived ? countEpisodesAllStmt : countEpisodesStmt;
-    const rows = stmt.all({ podcastId, limit, offset }) as EpisodeRow[];
+    const rows = stmt.all({ podcastId, limit, offset }) as EpisodeListRow[];
     const { count } = counter.get(podcastId) as { count: number };
     return { rows, total: count };
   }
@@ -206,7 +219,7 @@ export function listEpisodesForPodcast(
   const like = `%${needle.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
   const stmt = includeArchived ? listEpisodesSearchAllStmt : listEpisodesSearchStmt;
   const counter = includeArchived ? countEpisodesSearchAllStmt : countEpisodesSearchStmt;
-  const rows = stmt.all({ podcastId, like, limit, offset }) as EpisodeRow[];
+  const rows = stmt.all({ podcastId, like, limit, offset }) as EpisodeListRow[];
   const { count } = counter.get(podcastId, like) as { count: number };
   return { rows, total: count };
 }
@@ -283,7 +296,7 @@ export function saveTranscript(
   return new Date(row.updated_at * 1000).toISOString();
 }
 
-export function episodeFromRow(row: EpisodeRow): Episode {
+export function episodeFromRow(row: EpisodeRow & { has_transcript?: number }): Episode {
   return {
     id: row.id,
     guid: row.guid,
@@ -295,6 +308,7 @@ export function episodeFromRow(row: EpisodeRow): Episode {
     publishedAt: row.published_at == null ? null : new Date(row.published_at * 1000).toISOString(),
     episodeType: row.episode_type as Episode["episodeType"],
     archived: row.archived === 1,
+    hasTranscript: (row.has_transcript ?? 0) === 1,
   };
 }
 

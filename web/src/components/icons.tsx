@@ -85,6 +85,25 @@ export function GearIcon({ className }: { className?: string }) {
   );
 }
 
+export function TranscriptIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 12h6M9 15.5h6" />
+    </svg>
+  );
+}
+
 export function ArchiveIcon({ className }: { className?: string }) {
   return (
     <svg

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import EpisodeList from "../../components/EpisodeList";
 import PodcastHeader from "../../components/PodcastHeader";
+import { requestTranscription } from "../../lib/transcribe";
 import type { Episode } from "../../types";
 
 export const Route = createFileRoute("/$slug/$id")({
@@ -61,6 +62,11 @@ function PodcastDetail() {
   } | null>(null);
   const [archivePendingId, setArchivePendingId] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [transcriptPendingId, setTranscriptPendingId] = useState<string | null>(null);
+  // Episodes queued for transcription this session; the list's hasTranscript
+  // stays false until the job finishes, so this drives the "in progress" icon.
+  const [transcriptStartedIds, setTranscriptStartedIds] = useState<Set<string>>(new Set());
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
   // Skip the refetch on first mount — the loader already fetched page 0.
   const firstRender = useRef(true);
 
@@ -83,6 +89,8 @@ function PodcastDetail() {
   useEffect(() => {
     setPage0Override(null);
     setShowArchived(false);
+    setTranscriptStartedIds(new Set());
+    setTranscriptError(null);
   }, [podcast.id]);
 
   // Re-fetch page 0 when the archived toggle (or podcast) changes, since the
@@ -234,6 +242,22 @@ function PodcastDetail() {
     }
   }
 
+  async function downloadTranscript(ep: Episode) {
+    if (ep.hasTranscript || transcriptStartedIds.has(ep.id) || transcriptPendingId === ep.id) {
+      return;
+    }
+    setTranscriptPendingId(ep.id);
+    setTranscriptError(null);
+    try {
+      await requestTranscription(ep.id);
+      setTranscriptStartedIds((prev) => new Set(prev).add(ep.id));
+    } catch (err) {
+      setTranscriptError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTranscriptPendingId(null);
+    }
+  }
+
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8">
       <PodcastHeader podcast={podcast} />
@@ -251,10 +275,13 @@ function PodcastDetail() {
         }
         hasMore={hasMore}
         loadingMore={loadingMore}
-        loadError={loadError ?? searchError ?? archiveError}
+        loadError={loadError ?? searchError ?? archiveError ?? transcriptError}
         onLoadMore={loadMore}
         onToggleArchive={toggleArchive}
         archivePendingId={archivePendingId}
+        onDownloadTranscript={downloadTranscript}
+        transcriptPendingId={transcriptPendingId}
+        transcriptStartedIds={transcriptStartedIds}
         showArchived={showArchived}
         onShowArchivedChange={setShowArchived}
       />

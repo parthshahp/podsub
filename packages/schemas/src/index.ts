@@ -54,6 +54,8 @@ export const EpisodeSchema = z.object({
   episodeType: z.enum(["full", "trailer", "bonus"]).nullable(),
   /** True when the user archived the episode (hidden from the default list). */
   archived: z.boolean(),
+  /** True when at least one transcript row exists for the episode. */
+  hasTranscript: z.boolean(),
 });
 
 /** Query params for paginated episode lists (?limit=50&offset=0&q=…). */

@@ -35,10 +35,11 @@ export const episodeRoutes = new Hono()
 
     // Redundant for the client — the transcript itself is the signal.
     const job = jobs.get(row.episode.id);
+    const present = hasTranscript(row.episode.id);
     const detail: EpisodeDetail = {
       podcast: podcastFromRow(row.podcast),
-      episode: episodeFromRow(row.episode),
-      hasTranscript: hasTranscript(row.episode.id),
+      episode: episodeFromRow({ ...row.episode, has_transcript: present ? 1 : 0 }),
+      hasTranscript: present,
       transcribeStatus: !job || job.status === "done" ? "idle" : job.status,
       transcribeError: job?.error ?? null,
     };
@@ -163,6 +164,13 @@ export const episodeRoutes = new Hono()
 
       const { archived } = c.req.valid("json");
       setEpisodeArchived(id, archived);
-      return c.json(episodeFromRow({ ...row.episode, archived: archived ? 1 : 0 }));
+      const present = hasTranscript(id);
+      return c.json(
+        episodeFromRow({
+          ...row.episode,
+          archived: archived ? 1 : 0,
+          has_transcript: present ? 1 : 0,
+        }),
+      );
     },
   );
