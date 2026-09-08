@@ -12,6 +12,7 @@ import { importFeed } from "../feeds/importer.js";
 import { CreatePodcastInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
 import type { PodcastDetail } from "@podsub/schemas";
 import { cappedBodyStream, safeFetch } from "../lib/safe-fetch.js";
+import { getTranscribeStatus } from "../transcription/jobs.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -48,7 +49,7 @@ export const podcastRoutes = new Hono()
     const { rows, total } = listEpisodesForPodcast(podcast.id, query);
     const detail: PodcastDetail = {
       podcast: podcastFromRow(podcast),
-      episodes: rows.map(episodeFromRow),
+      episodes: rows.map((row) => episodeFromRow(row, getTranscribeStatus(row.id))),
       total,
       limit: query.limit,
       offset: query.offset,
@@ -63,7 +64,7 @@ export const podcastRoutes = new Hono()
 
     const { rows, total } = listEpisodesForPodcast(podcast.id, query);
     return c.json({
-      episodes: rows.map(episodeFromRow),
+      episodes: rows.map((row) => episodeFromRow(row, getTranscribeStatus(row.id))),
       total,
       limit: query.limit,
       offset: query.offset,

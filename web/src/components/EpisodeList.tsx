@@ -137,7 +137,9 @@ export default function EpisodeList({
               >
                 <span className="loading loading-spinner loading-xs" />
               </button>
-            ) : transcriptStartedIds.has(e.id) ? (
+            ) : transcriptStartedIds.has(e.id) ||
+              e.transcribeStatus === "queued" ||
+              e.transcribeStatus === "running" ? (
               <button
                 className="btn btn-ghost btn-circle min-h-11 min-w-11"
                 disabled

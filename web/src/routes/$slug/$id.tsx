@@ -63,8 +63,9 @@ function PodcastDetail() {
   const [archivePendingId, setArchivePendingId] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [transcriptPendingId, setTranscriptPendingId] = useState<string | null>(null);
-  // Episodes queued for transcription this session; the list's hasTranscript
-  // stays false until the job finishes, so this drives the "in progress" icon.
+  // Episodes queued for transcription this session (optimistic). The list
+  // also carries the server queue state per episode (transcribeStatus), so
+  // queued jobs survive reloads; this set covers the gap before refetch.
   const [transcriptStartedIds, setTranscriptStartedIds] = useState<Set<string>>(new Set());
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   // Skip the refetch on first mount — the loader already fetched page 0.
@@ -243,7 +244,13 @@ function PodcastDetail() {
   }
 
   async function downloadTranscript(ep: Episode) {
-    if (ep.hasTranscript || transcriptStartedIds.has(ep.id) || transcriptPendingId === ep.id) {
+    if (
+      ep.hasTranscript ||
+      ep.transcribeStatus === "queued" ||
+      ep.transcribeStatus === "running" ||
+      transcriptStartedIds.has(ep.id) ||
+      transcriptPendingId === ep.id
+    ) {
       return;
     }
     setTranscriptPendingId(ep.id);
@@ -251,6 +258,18 @@ function PodcastDetail() {
     try {
       await requestTranscription(ep.id);
       setTranscriptStartedIds((prev) => new Set(prev).add(ep.id));
+      // Optimistically reflect the server queue so the icon flips to
+      // in-progress immediately, even before the next list refetch.
+      const markQueued = (list: Episode[]) =>
+        list.map((x) =>
+          x.id === ep.id ? { ...x, transcribeStatus: "queued" as const } : x,
+        );
+      setPage0Override((p) => {
+        const base = p ?? { episodes: firstPage, total };
+        return { ...base, episodes: markQueued(base.episodes) };
+      });
+      setExtraPages(markQueued);
+      setSearchEpisodes(markQueued);
     } catch (err) {
       setTranscriptError(err instanceof Error ? err.message : String(err));
     } finally {

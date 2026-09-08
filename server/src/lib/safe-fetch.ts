@@ -134,7 +134,8 @@ export async function assertPublicHttpUrl(url: string): Promise<void> {
 
 /**
  * fetch() with per-hop SSRF validation, capped redirects, and a per-hop
- * header timeout. Body is NOT size-limited — use cappedBodyStream/readBodyCapped.
+ * header timeout. The timer is cleared once response headers arrive, so the
+ * body streams unbounded — use cappedBodyStream/readBodyCapped for size caps.
  */
 export async function safeFetch(
   url: string,
@@ -146,11 +147,26 @@ export async function safeFetch(
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     await assertPublicHttpUrl(current);
-    const res = await fetch(current, {
-      ...init,
-      redirect: "manual",
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    // Manual controller (not AbortSignal.timeout): the timer is cleared once
+    // headers arrive, so slow/large bodies aren't aborted mid-stream.
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, "TimeoutError")),
+      timeoutMs,
+    );
+    timer.unref?.();
+    let res: Response;
+    try {
+      res = await fetch(current, {
+        ...init,
+        redirect: "manual",
+        signal: init.signal
+          ? AbortSignal.any([init.signal, controller.signal])
+          : controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
       current = new URL(location, current).href;

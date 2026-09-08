@@ -41,6 +41,12 @@ export const PodcastListSchema = z.object({
   imageUrl: z.string().nullable(),
 });
 
+/** Live transcription queue state, mirrored from the server job registry.
+ *  - idle: no job (or job finished — check hasTranscript for the result)
+ *  - queued/running: transcript on the way; show the in-progress icon
+ *  - failed: last attempt failed; allow retry via the download action. */
+export const TranscribeStatusSchema = z.enum(["idle", "queued", "running", "failed"]);
+
 /** Domain shape for an episode (camelCase from the DB row). */
 export const EpisodeSchema = z.object({
   id: z.string(),
@@ -56,6 +62,8 @@ export const EpisodeSchema = z.object({
   archived: z.boolean(),
   /** True when at least one transcript row exists for the episode. */
   hasTranscript: z.boolean(),
+  /** Live queue state from the server job registry (resets on restart). */
+  transcribeStatus: TranscribeStatusSchema.default("idle"),
 });
 
 /** Query params for paginated episode lists (?limit=50&offset=0&q=…). */
@@ -139,3 +147,4 @@ export type PodcastDetail = z.infer<typeof PodcastDetailSchema>;
 export type CreatePodcastInput = z.infer<typeof CreatePodcastInputSchema>;
 export type AnkiAction = (typeof ANKI_ACTIONS)[number];
 export type AnkiProxyInput = z.infer<typeof AnkiProxyInputSchema>;
+export type TranscribeStatus = z.infer<typeof TranscribeStatusSchema>;

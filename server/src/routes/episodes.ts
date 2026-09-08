@@ -12,6 +12,7 @@ import {
 } from "../db/queries.js";
 import { ArchiveEpisodeInputSchema } from "@podsub/schemas";
 import { transcribeEpisode } from "../transcription/index.js";
+import { getJob, getTranscribeError, getTranscribeStatus, setJob } from "../transcription/jobs.js";
 import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
 import {
   proxyUpstreamAudio,
@@ -22,10 +23,6 @@ import {
 } from "../lib/audio-cache.js";
 import type { EpisodeDetail } from "@podsub/schemas";
 
-// In-memory job registry, keyed by episode id; resets on server restart.
-type Job = { status: "queued" | "running" | "done" | "failed"; error?: string };
-const jobs = new Map<string, Job>();
-
 // Episode detail + transcript state; the client polls this while a
 // transcription job runs.
 export const episodeRoutes = new Hono()
@@ -34,14 +31,16 @@ export const episodeRoutes = new Hono()
     if (!row) return c.json({ error: "Not found" }, 404);
 
     // Redundant for the client — the transcript itself is the signal.
-    const job = jobs.get(row.episode.id);
     const present = hasTranscript(row.episode.id);
     const detail: EpisodeDetail = {
       podcast: podcastFromRow(row.podcast),
-      episode: episodeFromRow({ ...row.episode, has_transcript: present ? 1 : 0 }),
+      episode: episodeFromRow(
+        { ...row.episode, has_transcript: present ? 1 : 0 },
+        getTranscribeStatus(row.episode.id),
+      ),
       hasTranscript: present,
-      transcribeStatus: !job || job.status === "done" ? "idle" : job.status,
-      transcribeError: job?.error ?? null,
+      transcribeStatus: getTranscribeStatus(row.episode.id),
+      transcribeError: getTranscribeError(row.episode.id),
     };
     return c.json(detail);
   })
@@ -51,22 +50,22 @@ export const episodeRoutes = new Hono()
     const row = getEpisodeWithPodcast(id);
     if (!row) return c.json({ error: "Not found" }, 404);
 
-    const job = jobs.get(id);
+    const job = getJob(id);
     if (job && (job.status === "queued" || job.status === "running")) {
       return c.json({ episodeId: id, status: job.status }, 202);
     }
 
-    jobs.set(id, { status: "running" });
+    setJob(id, { status: "running" });
     void transcribeEpisode(row.episode)
       .then(() => {
-        jobs.set(id, { status: "done" });
+        setJob(id, { status: "done" });
       })
       .catch((err) => {
-        jobs.set(id, { status: "failed", error: String(err) });
+        setJob(id, { status: "failed", error: String(err) });
         console.error(`Transcription failed for episode ${id}:`, err);
       });
 
-    return c.json({ episodeId: id, status: "queued" }, 202);
+    return c.json({ episodeId: id, status: "running" }, 202);
   })
   // Same-origin audio proxy: serves both the <audio> element and export
   // fetches, so playback + clipping share the browser HTTP cache.
@@ -166,11 +165,14 @@ export const episodeRoutes = new Hono()
       setEpisodeArchived(id, archived);
       const present = hasTranscript(id);
       return c.json(
-        episodeFromRow({
-          ...row.episode,
-          archived: archived ? 1 : 0,
-          has_transcript: present ? 1 : 0,
-        }),
+        episodeFromRow(
+          {
+            ...row.episode,
+            archived: archived ? 1 : 0,
+            has_transcript: present ? 1 : 0,
+          },
+          getTranscribeStatus(id),
+        ),
       );
     },
   );

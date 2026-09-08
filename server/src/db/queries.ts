@@ -1,6 +1,13 @@
 import { db } from "./index.js";
 import { appendWordToLine, groupWordsIntoLines } from "../transcription/index.js";
-import type { Episode, Podcast, PodcastList, Transcript, Word } from "@podsub/schemas";
+import type {
+  Episode,
+  Podcast,
+  PodcastList,
+  TranscribeStatus,
+  Transcript,
+  Word,
+} from "@podsub/schemas";
 
 export type PodcastRow = {
   id: string;
@@ -296,7 +303,10 @@ export function saveTranscript(
   return new Date(row.updated_at * 1000).toISOString();
 }
 
-export function episodeFromRow(row: EpisodeRow & { has_transcript?: number }): Episode {
+export function episodeFromRow(
+  row: EpisodeRow & { has_transcript?: number },
+  transcribeStatus: TranscribeStatus = "idle",
+): Episode {
   return {
     id: row.id,
     guid: row.guid,
@@ -309,6 +319,7 @@ export function episodeFromRow(row: EpisodeRow & { has_transcript?: number }): E
     episodeType: row.episode_type as Episode["episodeType"],
     archived: row.archived === 1,
     hasTranscript: (row.has_transcript ?? 0) === 1,
+    transcribeStatus,
   };
 }
 
