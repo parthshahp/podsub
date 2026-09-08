@@ -2,7 +2,7 @@ import { memo } from "react";
 
 import { formatClock } from "../../lib/format";
 import type { TranscriptLineData } from "../../lib/transcriptView";
-import { WordSpans, type WordHoverInfo } from "../WordSpans";
+import { WordSpans } from "../WordSpans";
 
 type TranscriptLineProps = {
   line: TranscriptLineData;
@@ -11,9 +11,6 @@ type TranscriptLineProps = {
   /** `${lineIndex}:${start}` key of the word whose dialog is open, if any. */
   dialogKey?: string | null;
   onSeek: (start: number) => void;
-  onWordEnter: (info: WordHoverInfo) => void;
-  onWordLeave: () => void;
-  onWordActivate: (info: WordHoverInfo) => void;
 };
 
 /**
@@ -25,7 +22,8 @@ type TranscriptLineProps = {
  * (outside a button) seeks too. On touch the row itself never seeks — a
  * missed word tap must not lose your place. Dictionary word buttons are
  * siblings — never nested — so each is independently reachable by
- * keyboard, mouse, and touch.
+ * keyboard, mouse, and touch. Word hover/activation is handled by
+ * delegated listeners on the parent <ol>, not per-row callbacks.
  */
 export const TranscriptLine = memo(function TranscriptLine({
   line,
@@ -33,9 +31,6 @@ export const TranscriptLine = memo(function TranscriptLine({
   isActive,
   dialogKey,
   onSeek,
-  onWordEnter,
-  onWordLeave,
-  onWordActivate,
 }: TranscriptLineProps) {
   const timeLabel = formatClock(line.start);
   return (
@@ -59,7 +54,7 @@ export const TranscriptLine = memo(function TranscriptLine({
         onClick={() => onSeek(line.start)}
         aria-label={`Seek to ${timeLabel}`}
         title={`Seek to ${timeLabel}`}
-        className="inline-flex min-h-11 shrink-0 items-center rounded px-1 text-xs text-base-content/50 tabular-nums select-none md:min-h-0 md:py-0.5"
+        className="inline-flex min-h-11 shrink-0 items-center rounded px-1 text-xs text-base-content/60 tabular-nums select-none md:min-h-0 md:py-0.5"
       >
         <time dateTime={`PT${line.start}S`}>{timeLabel}</time>
       </button>
@@ -69,9 +64,6 @@ export const TranscriptLine = memo(function TranscriptLine({
           tokens={line.tokens}
           lineIndex={index}
           expandedKey={dialogKey}
-          onWordEnter={onWordEnter}
-          onWordLeave={onWordLeave}
-          onWordActivate={onWordActivate}
         />
       </span>
       {isActive && <span className="sr-only"> (current line)</span>}

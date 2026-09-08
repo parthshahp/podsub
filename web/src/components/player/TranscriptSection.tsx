@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useSyncExternalStore, type RefObject } from "react";
+import { memo, useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 
 import { usePlaybackShortcuts } from "../../hooks/usePlaybackShortcuts";
 import { useTranscriptFollow } from "../../hooks/useTranscriptFollow";
@@ -6,6 +6,7 @@ import { useWordHover } from "../../hooks/useWordHover";
 import type { ExportStatus, WordSelection } from "../../hooks/useAnkiExport";
 import { findActiveLineIndex, type TranscriptLineData } from "../../lib/transcriptView";
 import type { Episode } from "../../types";
+import type { WordHoverInfo } from "../WordSpans";
 import { DefinitionPopover } from "../DefinitionPopover";
 import { TranscriptPane } from "./TranscriptPane";
 
@@ -86,6 +87,69 @@ export const TranscriptSection = memo(function TranscriptSection({
 
   usePlaybackShortcuts({ episode, lines, activeIdx, togglePlay, seek, setFollow });
 
+  // Ref mirror of lines for the delegated word handlers below — reading
+  // the ref keeps those three callbacks stable forever instead of
+  // re-creating them (and invalidating the pane memo) per render.
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
+
+  /** Nearest word button for an event target, if the event hit one. */
+  const wordButtonFrom = (target: EventTarget | null): HTMLElement | null =>
+    target instanceof HTMLElement ? target.closest("[data-word-btn]") : null;
+
+  const wordInfoFrom = (btn: HTMLElement): WordHoverInfo => {
+    const lineIndex = Number(btn.dataset.lineIndex);
+    return {
+      word: btn.dataset.word ?? "",
+      lineText: linesRef.current[lineIndex]?.text ?? "",
+      start: Number(btn.dataset.start),
+      lineIndex,
+      el: btn,
+    };
+  };
+
+  // mouseover/out bubble (unlike mouseenter/leave), so one pair on the
+  // <ol> covers all ~5k words. relatedTarget checks give enter/leave
+  // semantics: moves within the same button are ignored.
+  const handleWordOver = useCallback(
+    (e: React.MouseEvent<HTMLOListElement>) => {
+      const to = wordButtonFrom(e.target);
+      if (!to) return;
+      const from =
+        e.relatedTarget instanceof HTMLElement
+          ? e.relatedTarget.closest("[data-word-btn]")
+          : null;
+      if (from === to) return;
+      handleWordEnter(wordInfoFrom(to));
+    },
+    [handleWordEnter],
+  );
+
+  const handleWordOut = useCallback(
+    (e: React.MouseEvent<HTMLOListElement>) => {
+      const from = wordButtonFrom(e.target);
+      if (!from) return;
+      const to =
+        e.relatedTarget instanceof HTMLElement
+          ? e.relatedTarget.closest("[data-word-btn]")
+          : null;
+      if (to === from) return;
+      handleWordLeave();
+    },
+    [handleWordLeave],
+  );
+
+  // Clicks bubble from word buttons (open the dialog) and rows (seek);
+  // the row's own handler ignores clicks inside buttons, so no conflict.
+  const handleWordClick = useCallback(
+    (e: React.MouseEvent<HTMLOListElement>) => {
+      const btn = wordButtonFrom(e.target);
+      if (!btn) return;
+      openWord(wordInfoFrom(btn));
+    },
+    [openWord],
+  );
+
   // Stable per-row callback so TranscriptLine's memo() isn't defeated.
   const handleSeekLine = useCallback(
     (start: number) => {
@@ -139,9 +203,9 @@ export const TranscriptSection = memo(function TranscriptSection({
         dialogKey={dialogKey}
         containerRef={containerRef}
         onSeekLine={handleSeekLine}
-        onWordEnter={handleWordEnter}
-        onWordLeave={handleWordLeave}
-        onWordActivate={openWord}
+        onWordOver={handleWordOver}
+        onWordOut={handleWordOut}
+        onWordClick={handleWordClick}
         onUserScroll={handleUserScroll}
         onScrollHide={handleScrollHide}
         onResumeFollow={handleResumeFollow}

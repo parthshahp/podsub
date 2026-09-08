@@ -1,7 +1,6 @@
-import { memo, type RefObject } from "react";
+import { memo, type MouseEventHandler, type RefObject } from "react";
 
 import type { TranscriptLineData } from "../../lib/transcriptView";
-import type { WordHoverInfo } from "../WordSpans";
 import { TranscriptLine } from "./TranscriptLine";
 
 type TranscriptPaneProps = {
@@ -11,9 +10,14 @@ type TranscriptPaneProps = {
   dialogKey: string | null;
   containerRef: RefObject<HTMLOListElement | null>;
   onSeekLine: (start: number) => void;
-  onWordEnter: (info: WordHoverInfo) => void;
-  onWordLeave: () => void;
-  onWordActivate: (info: WordHoverInfo) => void;
+  /**
+   * Delegated word interactions — one listener per event on the <ol>,
+   * reading the word button's data attributes. Stable across renders and
+   * shared by all ~5k word buttons, instead of per-button closures.
+   */
+  onWordOver: MouseEventHandler<HTMLOListElement>;
+  onWordOut: MouseEventHandler<HTMLOListElement>;
+  onWordClick: MouseEventHandler<HTMLOListElement>;
   onUserScroll: () => void;
   onScrollHide: () => void;
   onResumeFollow: () => void;
@@ -41,9 +45,9 @@ export const TranscriptPane = memo(function TranscriptPane({
   dialogKey,
   containerRef,
   onSeekLine,
-  onWordEnter,
-  onWordLeave,
-  onWordActivate,
+  onWordOver,
+  onWordOut,
+  onWordClick,
   onUserScroll,
   onScrollHide,
   onResumeFollow,
@@ -57,6 +61,9 @@ export const TranscriptPane = memo(function TranscriptPane({
         onWheel={onUserScroll}
         onTouchMove={onUserScroll}
         onScroll={onScrollHide}
+        onMouseOver={onWordOver}
+        onMouseOut={onWordOut}
+        onClick={onWordClick}
       >
         {lines.map((line, i) => (
           <TranscriptLine
@@ -66,9 +73,6 @@ export const TranscriptPane = memo(function TranscriptPane({
             isActive={i === activeIdx}
             dialogKey={dialogKey}
             onSeek={onSeekLine}
-            onWordEnter={onWordEnter}
-            onWordLeave={onWordLeave}
-            onWordActivate={onWordActivate}
           />
         ))}
       </ol>
