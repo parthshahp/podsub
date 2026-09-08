@@ -11,6 +11,7 @@ import {
   ensurePodcastsDir,
   pipeToFileAtomically,
   releaseAudio,
+  resolveCachedAudio,
   retainAudio,
 } from "../lib/audio-cache.js";
 import { safeFetch } from "../lib/safe-fetch.js";
@@ -60,6 +61,14 @@ const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
 const AUDIO_TIMEOUT_MS = 30_000;
 
 async function downloadAudio(episode: EpisodeRow): Promise<string> {
+  // Cache hit first: skips the HEAD entirely, so a slow upstream can't time
+  // out an episode whose audio is already on disk.
+  const cached = resolveCachedAudio(episode.id);
+  if (cached) {
+    console.log(`Audio already downloaded: ${cached.file}`);
+    return cached.file;
+  }
+
   const head = await safeFetch(
     episode.audio_url,
     { method: "HEAD" },
