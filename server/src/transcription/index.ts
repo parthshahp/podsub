@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { CHUNK_SECONDS, MAX_LINE_SECONDS, MODEL } from "../config.js";
+import { CHUNK_DELAY_MS, CHUNK_SECONDS, MAX_LINE_SECONDS, MODEL } from "../config.js";
 import {
   audioFileFor,
   ensurePodcastsDir,
@@ -17,6 +17,8 @@ import { safeFetch } from "../lib/safe-fetch.js";
 import { saveTranscript, type EpisodeRow } from "../db/queries.js";
 
 const execFileP = promisify(execFile);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 import type { Word, Transcript } from "@podsub/schemas";
 
@@ -148,6 +150,7 @@ async function transcribeEpisodeInner(episode: EpisodeRow): Promise<Transcript> 
     let language: string | null = null;
 
     for (let i = 0; i < files.length; i++) {
+      if (i > 0) await sleep(CHUNK_DELAY_MS);
       console.log(`Transcribing chunk ${i + 1}/${files.length}...`);
       const data = await transcribeChunk(
         process.env.OPENROUTER_API_KEY ?? "",

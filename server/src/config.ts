@@ -11,8 +11,15 @@ export const WEB_DIST_DIR = path.join(ROOT, "web", "dist");
 
 export const MODEL = "microsoft/mai-transcribe-2";
 
-// Long audio times out upstream, so split before sending.
-export const CHUNK_SECONDS = 300;
+// Long audio must be split before sending. Measured ceiling for
+// mai-transcribe-2 via OpenRouter is ~32.5 min/request (larger → HTTP 400
+// "does not support large audio inputs"); 30 min leaves margin. Processing
+// is ~170× realtime, so a 30-min chunk takes ~10s, far under the 60s
+// upstream timeout.
+export const CHUNK_SECONDS = 1800;
+
+// Space out chunk requests; OpenRouter providers 429 on rapid same-model fire.
+export const CHUNK_DELAY_MS = 2_000;
 
 // Files untouched this long are evicted; a miss just re-streams upstream.
 export const AUDIO_CACHE_TTL_MS = 1 * 60 * 60 * 1000;
