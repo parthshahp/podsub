@@ -118,66 +118,68 @@ export default function EpisodeList({
             <span className="shrink-0 text-sm text-base-content/60 tabular-nums sm:w-16 sm:text-right">
               {e.durationSec != null ? formatDuration(e.durationSec) : ""}
             </span>
-            {e.hasTranscript ? (
-              <Link
-                to="/player/$episodeId"
-                params={{ episodeId: e.id }}
-                className="btn btn-ghost btn-circle min-h-11 min-w-11 text-success"
-                aria-label={`View transcript for ${e.title}`}
-                title="Transcript downloaded — view it"
-              >
-                <TranscriptIcon className="h-5 w-5" />
-              </Link>
-            ) : transcriptPendingId === e.id ? (
-              <button
-                className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                disabled
-                aria-label={`Starting transcript download for ${e.title}`}
-                title="Starting transcript download…"
-              >
-                <span className="loading loading-spinner loading-xs" />
-              </button>
-            ) : transcriptStartedIds.has(e.id) ||
-              e.transcribeStatus === "queued" ||
-              e.transcribeStatus === "running" ? (
-              <button
-                className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                disabled
-                aria-label={`Transcript download in progress for ${e.title}`}
-                title="Transcript download in progress — check back soon"
-              >
-                <TranscriptIcon className="h-5 w-5 opacity-40" />
-              </button>
-            ) : (
-              <button
-                className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                onClick={() => onDownloadTranscript(e)}
-                aria-label={`Download transcript for ${e.title}`}
-                title="Download transcript"
-              >
-                <TranscriptIcon className="h-5 w-5 opacity-40" />
-              </button>
-            )}
-            <button
-              className="btn btn-ghost btn-circle min-h-11 min-w-11"
-              onClick={() => onToggleArchive(e)}
-              disabled={archivePendingId === e.id}
-              aria-label={e.archived ? `Unarchive ${e.title}` : `Archive ${e.title}`}
-              title={e.archived ? "Unarchive episode" : "Archive episode"}
-            >
-              {e.archived ? (
-                <UnarchiveIcon className="h-5 w-5" />
+            <div className="ml-auto flex shrink-0 items-center gap-1 sm:contents">
+              {e.hasTranscript ? (
+                <Link
+                  to="/player/$episodeId"
+                  params={{ episodeId: e.id }}
+                  className="btn btn-ghost btn-circle min-h-11 min-w-11 text-success"
+                  aria-label={`View transcript for ${e.title}`}
+                  title="Transcript downloaded — view it"
+                >
+                  <TranscriptIcon className="h-5 w-5" />
+                </Link>
+              ) : transcriptPendingId === e.id ? (
+                <button
+                  className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                  disabled
+                  aria-label={`Starting transcript download for ${e.title}`}
+                  title="Starting transcript download…"
+                >
+                  <span className="loading loading-spinner loading-xs" />
+                </button>
+              ) : transcriptStartedIds.has(e.id) ||
+                e.transcribeStatus === "queued" ||
+                e.transcribeStatus === "running" ? (
+                <button
+                  className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                  disabled
+                  aria-label={`Transcript download in progress for ${e.title}`}
+                  title="Transcript download in progress — check back soon"
+                >
+                  <TranscriptIcon className="h-5 w-5 opacity-40" />
+                </button>
               ) : (
-                <ArchiveIcon className="h-5 w-5" />
+                <button
+                  className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                  onClick={() => onDownloadTranscript(e)}
+                  aria-label={`Download transcript for ${e.title}`}
+                  title="Download transcript"
+                >
+                  <TranscriptIcon className="h-5 w-5 opacity-40" />
+                </button>
               )}
-            </button>
-            <button
-              className="btn btn-ghost btn-circle ml-auto min-h-11 min-w-11 sm:ml-0"
-              onClick={() => onPlay(e)}
-              aria-label={`Play ${e.title}`}
-            >
-              <PlayIcon className="h-5 w-5" />
-            </button>
+              <button
+                className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                onClick={() => onToggleArchive(e)}
+                disabled={archivePendingId === e.id}
+                aria-label={e.archived ? `Unarchive ${e.title}` : `Archive ${e.title}`}
+                title={e.archived ? "Unarchive episode" : "Archive episode"}
+              >
+                {e.archived ? (
+                  <UnarchiveIcon className="h-5 w-5" />
+                ) : (
+                  <ArchiveIcon className="h-5 w-5" />
+                )}
+              </button>
+              <button
+                className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                onClick={() => onPlay(e)}
+                aria-label={`Play ${e.title}`}
+              >
+                <PlayIcon className="h-5 w-5" />
+              </button>
+            </div>
           </li>
         ))}
         {episodes.length === 0 && (
