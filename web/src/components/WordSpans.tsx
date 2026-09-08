@@ -51,7 +51,9 @@ export function WordSpans({
             data-word={seg.text}
             aria-haspopup="dialog"
             aria-expanded={expandedKey === `${lineIndex}:${seg.start}`}
-            aria-controls={expandedKey === `${lineIndex}:${seg.start}` ? "dictionary-dialog" : undefined}
+            aria-controls={
+              expandedKey === `${lineIndex}:${seg.start}` ? "dictionary-dialog" : undefined
+            }
             className="-my-1 cursor-pointer rounded-sm px-px py-1 hover:bg-primary/15"
             onMouseEnter={
               onWordEnter &&

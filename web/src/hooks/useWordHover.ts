@@ -37,21 +37,18 @@ export function useWordHover() {
   }, []);
 
   // Stable identities so memoized transcript rows don't re-render each tick.
-  const handleWordEnter = useCallback(
-    (info: WordHoverInfo) => {
-      // Touch screens fire synthetic mouse events on tap — the tap path
-      // (openWord) owns those; hover is a fine-pointer enhancement only.
-      if (!finePointer()) return;
-      if (hideWordTimerRef.current) clearTimeout(hideWordTimerRef.current);
-      if (showWordTimerRef.current) clearTimeout(showWordTimerRef.current);
-      showWordTimerRef.current = setTimeout(() => {
-        const { el, ...word } = info;
-        const { left, top, bottom, width } = el.getBoundingClientRect();
-        setHoveredWord({ ...word, rect: { left, top, bottom, width } });
-      }, 120);
-    },
-    [],
-  );
+  const handleWordEnter = useCallback((info: WordHoverInfo) => {
+    // Touch screens fire synthetic mouse events on tap — the tap path
+    // (openWord) owns those; hover is a fine-pointer enhancement only.
+    if (!finePointer()) return;
+    if (hideWordTimerRef.current) clearTimeout(hideWordTimerRef.current);
+    if (showWordTimerRef.current) clearTimeout(showWordTimerRef.current);
+    showWordTimerRef.current = setTimeout(() => {
+      const { el, ...word } = info;
+      const { left, top, bottom, width } = el.getBoundingClientRect();
+      setHoveredWord({ ...word, rect: { left, top, bottom, width } });
+    }, 120);
+  }, []);
 
   const handleWordLeave = useCallback(() => {
     if (showWordTimerRef.current) clearTimeout(showWordTimerRef.current);
@@ -100,9 +97,7 @@ export function useWordHover() {
     const el = invokerRef.current;
     if (!el) return;
     const { left, top, bottom, width } = el.getBoundingClientRect();
-    setDialogWord((prev) =>
-      prev ? { ...prev, rect: { left, top, bottom, width } } : prev,
-    );
+    setDialogWord((prev) => (prev ? { ...prev, rect: { left, top, bottom, width } } : prev));
   }, []);
 
   /** `${lineIndex}:${start}` key of the open dialog word, for aria-expanded. */

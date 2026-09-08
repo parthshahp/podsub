@@ -55,8 +55,7 @@ export const getModelFieldNames = (modelName: string) =>
   invoke<string[]>("modelFieldNames", { modelName });
 
 /** Returns one note id per input, or null for notes that failed to add. */
-export const addNotes = (notes: AnkiNote[]) =>
-  invoke<Array<number | null>>("addNotes", { notes });
+export const addNotes = (notes: AnkiNote[]) => invoke<Array<number | null>>("addNotes", { notes });
 
 /** Sync the local collection with AnkiWeb. Resolves null on success. */
 export const syncAnkiWeb = () => invoke<null>("sync");

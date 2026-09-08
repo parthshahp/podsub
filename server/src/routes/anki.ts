@@ -50,7 +50,10 @@ export const ankiRoutes = new Hono().post("/", proxyValidator, async (c) => {
     });
   } catch {
     return c.json(
-      { error: "Could not reach AnkiConnect. Is Anki running with the AnkiConnect add-on installed?" },
+      {
+        error:
+          "Could not reach AnkiConnect. Is Anki running with the AnkiConnect add-on installed?",
+      },
       502,
     );
   }

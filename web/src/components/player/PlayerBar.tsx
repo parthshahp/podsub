@@ -39,7 +39,10 @@ export function PlayerBar({
   };
 
   return (
-    <footer aria-label="Playback controls" className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-x-3 sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <footer
+      aria-label="Playback controls"
+      className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-x-3 sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+    >
       <button
         className="btn btn-circle btn-ghost min-h-11 min-w-11"
         onClick={() => seekBy(-10)}
@@ -82,17 +85,17 @@ export function PlayerBar({
       {ankiConnected && (
         <button
           className="btn btn-ghost btn-circle min-h-11 min-w-11"
-            disabled={syncing}
-            onClick={onSync}
-            aria-label="Sync Anki"
-            title="Sync Anki"
-          >
-            {syncing ? (
-              <span className="loading loading-spinner loading-xs" aria-hidden="true" />
-            ) : (
-              <SyncIcon className="h-5 w-5" />
-            )}
-          </button>
+          disabled={syncing}
+          onClick={onSync}
+          aria-label="Sync Anki"
+          title="Sync Anki"
+        >
+          {syncing ? (
+            <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+          ) : (
+            <SyncIcon className="h-5 w-5" />
+          )}
+        </button>
       )}
     </footer>
   );

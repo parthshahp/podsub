@@ -24,10 +24,7 @@ if (existsSync(path.join(WEB_DIST_DIR, "index.html"))) {
     if (c.req.path.startsWith("/api/")) {
       return c.json({ error: "Not found" }, 404);
     }
-    const res = await serveStatic({ root: WEB_DIST_DIR, path: "index.html" })(
-      c,
-      async () => {},
-    );
+    const res = await serveStatic({ root: WEB_DIST_DIR, path: "index.html" })(c, async () => {});
     return res ?? c.notFound();
   });
 }

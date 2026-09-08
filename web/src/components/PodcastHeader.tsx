@@ -35,7 +35,9 @@ export default function PodcastHeader({ podcast }: { podcast: Podcast }) {
         </span>
       )}
       <div className="flex min-w-0 flex-col pt-1">
-        <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{podcast.title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">
+          {podcast.title}
+        </h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-base-content/60">
           {podcast.author && <span>{podcast.author}</span>}
           {feedHost && (

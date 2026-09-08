@@ -30,8 +30,7 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
       const details = detailsRef.current;
-      if (details?.open && !details.contains(e.target as Node))
-        details.open = false;
+      if (details?.open && !details.contains(e.target as Node)) details.open = false;
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
@@ -84,13 +83,9 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
         </div>
         {(meta || description) && (
           <details ref={detailsRef} className="shrink-0 text-xs">
-            <summary className="btn btn-ghost btn-sm min-h-11 rounded-full px-3">
-              Details
-            </summary>
+            <summary className="btn btn-ghost btn-sm min-h-11 rounded-full px-3">Details</summary>
             <div className="absolute inset-x-3 top-full z-20 rounded-lg border border-base-300 bg-base-100 p-4 shadow-lg">
-              {meta && (
-                <p className="text-xs text-base-content/60 tabular-nums">{meta}</p>
-              )}
+              {meta && <p className="text-xs text-base-content/60 tabular-nums">{meta}</p>}
               {description && (
                 <p className="mt-2 max-h-48 overflow-y-auto text-sm leading-relaxed text-base-content/70">
                   {description}
@@ -102,7 +97,10 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
       </header>
 
       {/* Full sidebar on desktop. */}
-      <aside aria-labelledby="episode-title-full" className="hidden w-1/5 min-w-0 flex-col gap-4 overflow-y-auto border-r border-base-300 p-6 md:flex">
+      <aside
+        aria-labelledby="episode-title-full"
+        className="hidden w-1/5 min-w-0 flex-col gap-4 overflow-y-auto border-r border-base-300 p-6 md:flex"
+      >
         <Link
           to="/$slug/$id"
           params={{ slug, id: podcast.id }}
@@ -131,9 +129,7 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
           </h1>
           <p className="text-xs text-base-content/60">{podcast.title}</p>
         </div>
-        {meta && (
-          <div className="text-xs text-base-content/60 tabular-nums">{meta}</div>
-        )}
+        {meta && <div className="text-xs text-base-content/60 tabular-nums">{meta}</div>}
         {description && (
           <p className="text-sm leading-relaxed text-base-content/70">{description}</p>
         )}
