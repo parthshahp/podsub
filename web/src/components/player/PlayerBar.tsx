@@ -1,3 +1,5 @@
+import { memo, useCallback, useSyncExternalStore } from "react";
+
 import { formatClock } from "../../lib/format";
 import type { Episode } from "../../types";
 import { PauseIcon, PlayIcon, SkipBack10Icon, SkipForward10Icon, SyncIcon } from "../icons";
@@ -5,10 +7,13 @@ import { PauseIcon, PlayIcon, SkipBack10Icon, SkipForward10Icon, SyncIcon } from
 type PlayerBarProps = {
   episode: Episode;
   playing: boolean;
-  currentTime: number;
   max: number;
   ankiConnected: boolean;
   syncing: boolean;
+  /** useSyncExternalStore source from usePlayer — the bar is the only
+   *  subtree that subscribes to the raw ~4Hz time (small, isolated). */
+  subscribeToTime: (cb: () => void) => () => void;
+  getTime: () => number;
   onToggle: () => void;
   onSeek: (t: number) => void;
   onSync: () => void;
@@ -21,23 +26,35 @@ type PlayerBarProps = {
  * Single row on all screens so play + slider + times stay usable one-handed
  * without stealing transcript height; the slider shrinks while the times
  * stay legible. Bottom padding respects the iOS home indicator safe area.
+ *
+ * Memoized + self-subscribed: the page passes stable props and never
+ * re-renders during playback; only this bar ticks.
  */
-export function PlayerBar({
+export const PlayerBar = memo(function PlayerBar({
   episode,
   playing,
-  currentTime,
   max,
   ankiConnected,
   syncing,
+  subscribeToTime,
+  getTime,
   onToggle,
   onSeek,
   onSync,
 }: PlayerBarProps) {
+  // The <audio> clock ticks ~4Hz with fractional seconds, but everything
+  // here renders whole seconds (labels) and step={1} (slider). Subscribing
+  // to the floored snapshot drops this bar from ~4 renders/sec to 1 —
+  // useSyncExternalStore only re-renders when the snapshot value changes.
+  const getSecond = useCallback(() => Math.floor(getTime()), [getTime]);
+  const currentSecond = useSyncExternalStore(subscribeToTime, getSecond);
+
   const seekBy = (delta: number) => {
-    const t = currentTime + delta;
+    // Precise clock for the math (the quantized render value would
+    // silently drop the sub-second fraction on ±10s skips).
+    const t = getTime() + delta;
     onSeek(Math.min(Math.max(t, 0), max || t));
   };
-
   return (
     <footer
       aria-label="Playback controls"
@@ -68,17 +85,17 @@ export function PlayerBar({
         <SkipForward10Icon className="h-6 w-6" />
       </button>
       <div className="flex min-w-0 flex-1 basis-48 items-center gap-2 text-xs text-base-content/60 tabular-nums">
-        <span className="shrink-0">{formatClock(currentTime)}</span>
+        <span className="shrink-0">{formatClock(currentSecond)}</span>
         <input
           type="range"
           min={0}
           max={max}
           step={1}
-          value={Math.min(currentTime, max)}
+          value={Math.min(currentSecond, max)}
           onChange={(e) => onSeek(Number(e.target.value))}
           className="range range-sm pointer-coarse:range-md min-w-0 flex-1"
           aria-label="Seek"
-          aria-valuetext={`${formatClock(currentTime)} of ${formatClock(max)}`}
+          aria-valuetext={`${formatClock(currentSecond)} of ${formatClock(max)}`}
         />
         <span className="shrink-0">{formatClock(max)}</span>
       </div>
@@ -99,4 +116,4 @@ export function PlayerBar({
       )}
     </footer>
   );
-}
+});

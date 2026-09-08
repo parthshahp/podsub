@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { loadDictionary, resolveSegment, type WordMatch } from "../lib/dictionary";
 import { PlusIcon } from "./icons";
@@ -43,8 +43,11 @@ type Props = {
  * lazily-loaded CC-CEDICT dictionary. Behaves as a non-modal dialog:
  * labelled, dismissible via Esc/close-button/outside-tap, with focus moved
  * in on activation and returned to the word on close.
+ *
+ * Memoized: the parent section re-renders on playback line changes, but
+ * the popover only rebuilds when its own word or callbacks change.
  */
-export function DefinitionPopover({
+export const DefinitionPopover = memo(function DefinitionPopover({
   hover,
   dialog,
   focusOnOpen,
@@ -211,7 +214,7 @@ export function DefinitionPopover({
       )}
     </div>
   );
-}
+});
 
 function flipAbove(hover: HoveredWord, viewportHeight: number): boolean {
   return hover.rect.bottom + GAP + MAX_HEIGHT > viewportHeight;

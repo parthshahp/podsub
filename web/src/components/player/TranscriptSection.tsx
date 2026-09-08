@@ -1,0 +1,174 @@
+import { memo, useCallback, useEffect, useSyncExternalStore, type RefObject } from "react";
+
+import { usePlaybackShortcuts } from "../../hooks/usePlaybackShortcuts";
+import { useTranscriptFollow } from "../../hooks/useTranscriptFollow";
+import { useWordHover } from "../../hooks/useWordHover";
+import type { ExportStatus, WordSelection } from "../../hooks/useAnkiExport";
+import { findActiveLineIndex, type TranscriptLineData } from "../../lib/transcriptView";
+import type { Episode } from "../../types";
+import { DefinitionPopover } from "../DefinitionPopover";
+import { TranscriptPane } from "./TranscriptPane";
+
+type TranscriptSectionProps = {
+  episode: Episode;
+  lines: TranscriptLineData[];
+  togglePlay: (e: Episode) => void;
+  seek: (t: number) => void;
+  subscribeToTime: (cb: () => void) => () => void;
+  getTime: () => number;
+  ankiStatus: ExportStatus | null;
+  ankiConnected: boolean;
+  sendingWord: string | null;
+  exportWord: (sel: WordSelection) => Promise<boolean>;
+  /**
+   * Follow lives in this section, but the PlayerBar (a sibling) also seeks.
+   * The page wires bar seeks through this ref so dragging the slider
+   * resumes auto-follow without lifting follow state (and its renders)
+   * back up to the page.
+   */
+  resumeFollowRef: RefObject<(() => void) | null>;
+};
+
+/**
+ * Transcript subtree: owns everything that updates during playback or hover
+ * (active line, auto-follow, hover preview, dialog) so those states never
+ * re-render the page, sidebar, or player bar.
+ *
+ * - activeIdx derives from the shared time store via useSyncExternalStore:
+ *   the snapshot is a line number, so this section re-renders only when the
+ *   highlighted line actually changes — not on every ~4Hz tick.
+ * - hover/dialog state lives here too: hovering a word re-renders only this
+ *   section (pane memo bails for rows, popover updates), never the page.
+ */
+export const TranscriptSection = memo(function TranscriptSection({
+  episode,
+  lines,
+  togglePlay,
+  seek,
+  subscribeToTime,
+  getTime,
+  ankiStatus,
+  ankiConnected,
+  sendingWord,
+  exportWord,
+  resumeFollowRef,
+}: TranscriptSectionProps) {
+  // Snapshot is the line index (a stable number) — Object.is bails out on
+  // the vast majority of time notifications.
+  const activeIdx = useSyncExternalStore(
+    subscribeToTime,
+    () => findActiveLineIndex(lines, getTime()),
+  );
+
+  const { containerRef, follow, setFollow, handleUserScroll } = useTranscriptFollow(activeIdx);
+
+  // Let sibling seeks (player bar slider, shortcuts elsewhere) resume follow.
+  useEffect(() => {
+    resumeFollowRef.current = () => setFollow(true);
+    return () => {
+      resumeFollowRef.current = null;
+    };
+  }, [setFollow, resumeFollowRef]);
+  const {
+    hoveredWord,
+    dialogWord,
+    dialogKey,
+    handleWordEnter,
+    handleWordLeave,
+    hideHoveredWord,
+    keepHover,
+    openWord,
+    closeDialog,
+    refreshDialogRect,
+  } = useWordHover();
+  // Activated dialog takes precedence over the hover preview.
+  const activeWord = dialogWord ?? hoveredWord;
+
+  usePlaybackShortcuts({ episode, lines, activeIdx, togglePlay, seek, setFollow });
+
+  // Stable per-row callback so TranscriptLine's memo() isn't defeated.
+  const handleSeekLine = useCallback(
+    (start: number) => {
+      seek(start);
+      setFollow(true);
+    },
+    [seek, setFollow],
+  );
+
+  // The dialog captures its word's rect at open time — keep it anchored
+  // when the pane scrolls, and pause auto-follow while open so playback
+  // doesn't scroll the line away from under the popover.
+  const handleScrollHide = useCallback(() => {
+    hideHoveredWord();
+    refreshDialogRect();
+  }, [hideHoveredWord, refreshDialogRect]);
+
+  const handleResumeFollow = useCallback(() => {
+    setFollow(true);
+  }, [setFollow]);
+
+  useEffect(() => {
+    if (dialogWord) setFollow(false);
+  }, [dialogWord, setFollow]);
+
+  // Stable popover callbacks — inline arrows here would re-render the
+  // popover on every active-line change.
+  const handlePopoverClose = useCallback(() => {
+    if (dialogWord) closeDialog();
+    else hideHoveredWord();
+  }, [dialogWord, closeDialog, hideHoveredWord]);
+
+  const handleExportWord = useCallback(
+    (sel: WordSelection) => {
+      void exportWord(sel).then((added) => {
+        if (added) {
+          if (dialogWord) closeDialog();
+          else hideHoveredWord();
+        }
+      });
+    },
+    [exportWord, dialogWord, closeDialog, hideHoveredWord],
+  );
+
+  return (
+    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+      <TranscriptPane
+        lines={lines}
+        activeIdx={activeIdx}
+        follow={follow}
+        dialogKey={dialogKey}
+        containerRef={containerRef}
+        onSeekLine={handleSeekLine}
+        onWordEnter={handleWordEnter}
+        onWordLeave={handleWordLeave}
+        onWordActivate={openWord}
+        onUserScroll={handleUserScroll}
+        onScrollHide={handleScrollHide}
+        onResumeFollow={handleResumeFollow}
+      />
+      {activeWord && (
+        <DefinitionPopover
+          hover={activeWord}
+          dialog={dialogWord != null}
+          focusOnOpen={dialogWord != null}
+          invoker={dialogWord?.invoker}
+          onClose={handlePopoverClose}
+          onKeep={keepHover}
+          onLeave={handleWordLeave}
+          onAnki={ankiConnected ? handleExportWord : undefined}
+          ankiSending={sendingWord === activeWord.word}
+        />
+      )}
+      {ankiStatus && (
+        <div
+          role="status"
+          className={`alert absolute right-4 bottom-16 z-10 w-auto max-w-md py-2 text-sm shadow-lg sm:right-6 sm:bottom-6 ${
+            ankiStatus.kind === "success" ? "alert-success" : "alert-error"
+          }`}
+        >
+          {ankiStatus.message}
+        </div>
+      )}
+    </div>
+  );
+});

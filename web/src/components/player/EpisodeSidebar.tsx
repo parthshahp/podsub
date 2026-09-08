@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { formatDate, formatDuration } from "../../lib/format";
@@ -15,8 +15,11 @@ type EpisodeSidebarProps = {
 /**
  * Episode metadata: a compact horizontal header below `md` (thumbnail +
  * titles + expandable description) and the full sidebar on `md` and up.
+ *
+ * Memoized: props are static for the life of the page, so playback ticks
+ * and transcript hover must never re-execute this subtree.
  */
-export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) {
+export const EpisodeSidebar = memo(function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) {
   const meta = [
     episode.publishedAt ? formatDate(episode.publishedAt) : "",
     episode.durationSec != null ? formatDuration(episode.durationSec) : "",
@@ -140,4 +143,4 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
       </aside>
     </>
   );
-}
+});

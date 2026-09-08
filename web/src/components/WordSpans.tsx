@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 
 import { isHanText } from "../lib/dictionary";
 import { segmentLine, type TextSegment } from "../lib/segmentation";
@@ -33,11 +33,80 @@ type WordSpansProps = {
 };
 
 /**
+ * One Han word button. Memoized so a parent line re-render (active
+ * highlight, dialog open elsewhere) doesn't rebuild every word's closures —
+ * the per-word handlers below are stable per button and only fire the
+ * parent callback with the constructed info on actual interaction.
+ */
+const WordButton = memo(function WordButton({
+  seg,
+  lineText,
+  lineIndex,
+  expanded,
+  onWordEnter,
+  onWordLeave,
+  onWordActivate,
+}: {
+  seg: TextSegment;
+  lineText: string;
+  lineIndex: number;
+  expanded: boolean;
+  onWordEnter?: (info: WordHoverInfo) => void;
+  onWordLeave?: () => void;
+  onWordActivate?: (info: WordHoverInfo) => void;
+}) {
+  const handleEnter = useCallback(
+    (e: React.MouseEvent<HTMLElement>) => {
+      onWordEnter?.({
+        word: seg.text,
+        lineText,
+        start: seg.start,
+        lineIndex,
+        el: e.currentTarget,
+      });
+    },
+    [onWordEnter, seg.text, seg.start, lineText, lineIndex],
+  );
+
+  const handleActivate = useCallback(
+    (e: React.MouseEvent<HTMLElement>) => {
+      onWordActivate?.({
+        word: seg.text,
+        lineText,
+        start: seg.start,
+        lineIndex,
+        el: e.currentTarget,
+      });
+    },
+    [onWordActivate, seg.text, seg.start, lineText, lineIndex],
+  );
+
+  return (
+    <button
+      type="button"
+      data-word={seg.text}
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      aria-controls={expanded ? "dictionary-dialog" : undefined}
+      className="-my-1 cursor-pointer rounded-sm px-px py-1 hover:bg-primary/15"
+      onMouseEnter={onWordEnter ? handleEnter : undefined}
+      onMouseLeave={onWordLeave}
+      onClick={onWordActivate ? handleActivate : undefined}
+    >
+      {seg.text}
+    </button>
+  );
+});
+
+/**
  * Transcript text with Han words segmented into individually activatable
  * word buttons. Hover previews the definition on fine pointers; activating
  * the button opens the dictionary dialog (keyboard, click, and touch).
+ *
+ * Memoized: a line re-renders only when its own text/tokens/expanded state
+ * change, so hover previews elsewhere don't rebuild every segment.
  */
-export function WordSpans({
+export const WordSpans = memo(function WordSpans({
   text,
   tokens,
   lineIndex,
@@ -51,46 +120,20 @@ export function WordSpans({
     <>
       {segments.map((seg, i) =>
         seg.wordLike && isHanText(seg.text) ? (
-          <button
+          <WordButton
             key={i}
-            type="button"
-            data-word={seg.text}
-            aria-haspopup="dialog"
-            aria-expanded={expandedKey === `${lineIndex}:${seg.start}`}
-            aria-controls={
-              expandedKey === `${lineIndex}:${seg.start}` ? "dictionary-dialog" : undefined
-            }
-            className="-my-1 cursor-pointer rounded-sm px-px py-1 hover:bg-primary/15"
-            onMouseEnter={
-              onWordEnter &&
-              ((e) =>
-                onWordEnter({
-                  word: seg.text,
-                  lineText: text,
-                  start: seg.start,
-                  lineIndex,
-                  el: e.currentTarget,
-                }))
-            }
-            onMouseLeave={onWordLeave}
-            onClick={
-              onWordActivate &&
-              ((e) =>
-                onWordActivate({
-                  word: seg.text,
-                  lineText: text,
-                  start: seg.start,
-                  lineIndex,
-                  el: e.currentTarget,
-                }))
-            }
-          >
-            {seg.text}
-          </button>
+            seg={seg}
+            lineText={text}
+            lineIndex={lineIndex}
+            expanded={expandedKey === `${lineIndex}:${seg.start}`}
+            onWordEnter={onWordEnter}
+            onWordLeave={onWordLeave}
+            onWordActivate={onWordActivate}
+          />
         ) : (
           seg.text
         ),
       )}
     </>
   );
-}
+});

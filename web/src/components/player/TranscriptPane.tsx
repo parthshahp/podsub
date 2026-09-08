@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 
 import type { TranscriptLineData } from "../../lib/transcriptView";
 import type { WordHoverInfo } from "../WordSpans";
@@ -29,8 +29,12 @@ type TranscriptPaneProps = {
  * Per-tick live announcements are deliberately avoided (too chatty) —
  * screen-reader users navigate rows as a list with full seek/lookup
  * controls on each.
+ *
+ * Memoized: props change only when the active line, follow flag, or open
+ * dialog change — not on playback ticks or hover previews — so the ~4Hz
+ * time subscription and word hover never re-map the row list.
  */
-export function TranscriptPane({
+export const TranscriptPane = memo(function TranscriptPane({
   lines,
   activeIdx,
   follow,
@@ -78,4 +82,4 @@ export function TranscriptPane({
       )}
     </>
   );
-}
+});
