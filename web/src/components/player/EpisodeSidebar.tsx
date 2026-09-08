@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 
 import { formatDate, formatDuration } from "../../lib/format";
 import { stripHtml } from "../../lib/html";
+import { podcastImageSrcSet, podcastImageUrl } from "../../lib/podcastImage";
 import type { Episode, Podcast } from "../../types";
 
 type EpisodeSidebarProps = {
@@ -58,11 +59,12 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
         >
           {podcast.imageUrl ? (
             <img
-              src={podcast.imageUrl}
+              src={podcastImageUrl(podcast.id, 96)}
               alt=""
               width={48}
               height={48}
               loading="eager"
+              decoding="async"
               fetchPriority="high"
               className="aspect-square h-12 w-12 object-cover"
             />
@@ -109,11 +111,13 @@ export function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) 
         >
           {podcast.imageUrl ? (
             <img
-              src={podcast.imageUrl}
+              src={podcastImageUrl(podcast.id, 256)}
+              srcSet={podcastImageSrcSet(podcast.id, 256, 512)}
               alt={podcast.title}
               width={400}
               height={400}
               loading="eager"
+              decoding="async"
               fetchPriority="high"
               className="aspect-square w-full object-cover"
             />

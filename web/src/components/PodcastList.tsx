@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { SearchIcon } from "./icons";
 import { kebabCase } from "../lib/kebab";
+import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
 import type { PodcastList } from "../types.ts";
 
 type Props = {
@@ -54,9 +55,11 @@ export default function PodcastList({ filteredPodcasts, q }: Props) {
               >
                 {p.imageUrl ? (
                   <img
-                    src={p.imageUrl}
+                    src={podcastImageUrl(p.id, 256)}
+                    srcSet={podcastImageSrcSet(p.id, 256, 512)}
                     alt={p.title}
                     loading="lazy"
+                    decoding="async"
                     width={240}
                     height={240}
                     className="aspect-square w-full rounded-lg object-cover shadow-sm transition-[transform,box-shadow] duration-200 ease-out group-hover:scale-[1.02] group-hover:shadow-md"

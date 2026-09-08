@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { stripHtml } from "../lib/html";
+import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
 import type { Podcast } from "../types";
 
 export default function PodcastHeader({ podcast }: { podcast: Podcast }) {
@@ -21,11 +22,13 @@ export default function PodcastHeader({ podcast }: { podcast: Podcast }) {
     <section className="flex flex-col gap-4 sm:flex-row sm:gap-8">
       {podcast.imageUrl ? (
         <img
-          src={podcast.imageUrl}
+          src={podcastImageUrl(podcast.id, 256)}
+          srcSet={podcastImageSrcSet(podcast.id, 256, 512)}
           alt={podcast.title}
           width={192}
           height={192}
           loading="eager"
+          decoding="async"
           fetchPriority="high"
           className="h-28 w-28 shrink-0 rounded-lg object-cover shadow-sm sm:h-48 sm:w-48"
         />

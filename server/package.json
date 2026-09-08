@@ -18,7 +18,8 @@
     "@podsub/schemas": "workspace:*",
     "better-sqlite3": "^13.0.3",
     "hono": "^4.13.7",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
