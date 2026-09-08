@@ -66,6 +66,7 @@ export const TranscriptLine = memo(function TranscriptLine({
       <span className="min-w-0 flex-1">
         <WordSpans
           text={line.text}
+          tokens={line.tokens}
           lineIndex={index}
           expandedKey={dialogKey}
           onWordEnter={onWordEnter}

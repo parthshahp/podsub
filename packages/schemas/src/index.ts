@@ -6,6 +6,14 @@ export const WordSchema = z.object({
   end: z.number(),
 });
 
+/** Display token from server-side jieba segmentation. `start` is a UTF-16
+ * char offset within the line text, matching Intl.Segmenter indices. */
+export const LineTokenSchema = z.object({
+  text: z.string(),
+  start: z.number().int().min(0),
+  wordLike: z.boolean(),
+});
+
 /** Transcript API response. `lines` is derived server-side, never persisted. */
 export const TranscriptSchema = z.object({
   model: z.string(),
@@ -16,6 +24,8 @@ export const TranscriptSchema = z.object({
     z.object({
       start: z.number(),
       text: z.string(),
+      /** Jieba display tokens; absent → the client falls back to Intl.Segmenter. */
+      tokens: z.array(LineTokenSchema).optional(),
     }),
   ),
 });
@@ -135,6 +145,7 @@ export const AnkiProxyInputSchema = z.object({
 });
 
 export type Word = z.infer<typeof WordSchema>;
+export type LineToken = z.infer<typeof LineTokenSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Podcast = z.infer<typeof PodcastSchema>;
 export type PodcastList = z.infer<typeof PodcastListSchema>;

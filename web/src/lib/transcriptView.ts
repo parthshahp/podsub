@@ -1,8 +1,10 @@
-import type { Word } from "../types";
+import type { LineToken, Word } from "../types";
 import { TAIL_SEC, blobToBase64 } from "./audioClip";
 
-/** A single transcript row: start time plus display text. */
-export type TranscriptLineData = { start: number; text: string };
+/** A single transcript row: start time plus display text.
+ * `tokens` are server-side jieba segments when present; the client falls
+ * back to Intl.Segmenter for lines without them. */
+export type TranscriptLineData = { start: number; text: string; tokens?: LineToken[] };
 
 /** Ease-in-out cubic scroll; re-invoking cancels the previous run. */
 export function animateScrollTo(container: HTMLElement, target: number, duration = 300) {

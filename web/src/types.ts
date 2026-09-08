@@ -1,5 +1,6 @@
 export type {
   Word,
+  LineToken,
   Transcript,
   Podcast,
   PodcastList,

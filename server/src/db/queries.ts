@@ -1,5 +1,6 @@
 import { db } from "./index.js";
 import { appendWordToLine, groupWordsIntoLines } from "../transcription/index.js";
+import { getSegmentedLines } from "../transcription/segment.js";
 import type {
   Episode,
   Podcast,
@@ -126,7 +127,7 @@ const getEpisodeStmt = db.prepare(`
 
 // Only ASR transcripts have segments; latest by updated_at.
 const getTranscriptStmt = db.prepare(`
-  SELECT model, segments, updated_at FROM transcript
+  SELECT model, language, segments, updated_at FROM transcript
   WHERE episode_id = ? AND segments IS NOT NULL
   ORDER BY updated_at DESC
   LIMIT 1
@@ -170,6 +171,7 @@ export function getTranscript(episodeId: string): Transcript | undefined {
   const row = getTranscriptStmt.get(episodeId) as
     | {
         model: string;
+        language: string | null;
         segments: string;
         updated_at: number;
       }
@@ -190,7 +192,7 @@ export function getTranscript(episodeId: string): Transcript | undefined {
   return {
     model: row.model,
     words,
-    lines: groupWordsIntoLines(words),
+    lines: getSegmentedLines(episodeId, row.updated_at, groupWordsIntoLines(words), row.language),
     updatedAt: new Date(row.updated_at * 1000).toISOString(),
   };
 }

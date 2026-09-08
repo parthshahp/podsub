@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { isHanText } from "../lib/dictionary";
-import { segmentLine } from "../lib/segmentation";
+import { segmentLine, type TextSegment } from "../lib/segmentation";
 
 /** Hovered or activated Han word — everything needed for lookup, placement, and export. */
 export type WordHoverInfo = {
@@ -17,6 +17,11 @@ export type WordHoverInfo = {
 
 type WordSpansProps = {
   text: string;
+  /**
+   * Server-side jieba tokens (same shape as TextSegment). Rendered directly
+   * when present; otherwise the line is segmented locally with Intl.Segmenter.
+   */
+  tokens?: TextSegment[];
   /** Index of the transcript line being rendered. */
   lineIndex: number;
   /** `${lineIndex}:${start}` key of the word whose dialog is open, if any. */
@@ -34,13 +39,14 @@ type WordSpansProps = {
  */
 export function WordSpans({
   text,
+  tokens,
   lineIndex,
   expandedKey,
   onWordEnter,
   onWordLeave,
   onWordActivate,
 }: WordSpansProps) {
-  const segments = useMemo(() => segmentLine(text), [text]);
+  const segments = useMemo(() => tokens ?? segmentLine(text), [tokens, text]);
   return (
     <>
       {segments.map((seg, i) =>
