@@ -1,19 +1,19 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
 import sharp from "sharp";
 
 import {
-  episodeFromRow,
+  episodeListItemFromRow,
   getPodcast,
-  listEpisodesForPodcast,
+  listEpisodes,
   listPodcasts,
   podcastFromRow,
 } from "../db/queries.js";
 import { importFeed } from "../feeds/importer.js";
-import { CreatePodcastInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
+import { CreatePodcastInputSchema } from "@podsub/schemas";
 import type { PodcastDetail } from "@podsub/schemas";
 import { cappedBodyStream, readBodyCapped, safeFetch } from "../lib/safe-fetch.js";
 import { getTranscribeStatus } from "../transcription/jobs.js";
+import { listEpisodesValidator } from "./episodes.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -60,12 +60,6 @@ function snapSize(requested: number): number {
   return IMAGE_SIZES[IMAGE_SIZES.length - 1];
 }
 
-const listEpisodesValidator = zValidator("query", ListEpisodesQuerySchema, (result, c) => {
-  if (!result.success) {
-    return c.json({ error: "Expected query ?limit=<1-100>&offset=<non-negative int>" }, 400);
-  }
-});
-
 export const podcastRoutes = new Hono()
   .get("/", (c) => c.json(listPodcasts()))
   .post("/", async (c) => {
@@ -90,29 +84,15 @@ export const podcastRoutes = new Hono()
     const podcast = getPodcast(c.req.param("id"));
     if (!podcast) return c.json({ error: "Not found" }, 404);
 
-    const { rows, total } = listEpisodesForPodcast(podcast.id, query);
+    const { rows, total } = listEpisodes({ podcastId: podcast.id, ...query });
     const detail: PodcastDetail = {
       podcast: podcastFromRow(podcast),
-      episodes: rows.map((row) => episodeFromRow(row, getTranscribeStatus(row.id))),
+      episodes: rows.map((row) => episodeListItemFromRow(row, getTranscribeStatus(row.id))),
       total,
       limit: query.limit,
       offset: query.offset,
     };
     return c.json(detail);
-  })
-  .get("/:id/episodes", listEpisodesValidator, (c) => {
-    const query = c.req.valid("query");
-
-    const podcast = getPodcast(c.req.param("id"));
-    if (!podcast) return c.json({ error: "Not found" }, 404);
-
-    const { rows, total } = listEpisodesForPodcast(podcast.id, query);
-    return c.json({
-      episodes: rows.map((row) => episodeFromRow(row, getTranscribeStatus(row.id))),
-      total,
-      limit: query.limit,
-      offset: query.offset,
-    });
   })
   .get("/:id/image", async (c) => {
     // Artwork proxy: CDNs rarely send CORS headers, and feed-supplied

@@ -4,13 +4,15 @@ import { zValidator } from "@hono/zod-validator";
 
 import {
   episodeFromRow,
+  episodeListItemFromRow,
   getEpisodeWithPodcast,
   getTranscript,
   hasTranscript,
+  listEpisodes,
   podcastFromRow,
   setEpisodeArchived,
 } from "../db/queries.js";
-import { ArchiveEpisodeInputSchema } from "@podsub/schemas";
+import { ArchiveEpisodeInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
 import { transcribeEpisode } from "../transcription/index.js";
 import { getJob, getTranscribeError, getTranscribeStatus, setJob } from "../transcription/jobs.js";
 import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
@@ -21,11 +23,34 @@ import {
   retainAudio,
   serveCachedAudio,
 } from "../lib/audio-cache.js";
-import type { EpisodeDetail } from "@podsub/schemas";
+import type { EpisodeDetail, EpisodeList } from "@podsub/schemas";
+
+// Shared validator for paginated episode lists (?limit=&offset=&q=&…).
+export const listEpisodesValidator = zValidator("query", ListEpisodesQuerySchema, (result, c) => {
+  if (!result.success) {
+    return c.json(
+      { error: "Expected query ?limit=<1-100>&offset=<non-negative int>&podcastId=<id>" },
+      400,
+    );
+  }
+});
 
 // Episode detail + transcript state; the client polls this while a
 // transcription job runs.
 export const episodeRoutes = new Hono()
+  // Generic paginated episode list across all podcasts; scope to one show
+  // with ?podcastId= (the podcast detail page does exactly that).
+  .get("/", listEpisodesValidator, (c) => {
+    const query = c.req.valid("query");
+    const { rows, total } = listEpisodes(query);
+    const list: EpisodeList = {
+      episodes: rows.map((row) => episodeListItemFromRow(row, getTranscribeStatus(row.id))),
+      total,
+      limit: query.limit,
+      offset: query.offset,
+    };
+    return c.json(list);
+  })
   .get("/:id", (c) => {
     const row = getEpisodeWithPodcast(c.req.param("id"));
     if (!row) return c.json({ error: "Not found" }, 404);

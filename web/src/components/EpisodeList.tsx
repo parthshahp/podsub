@@ -2,10 +2,12 @@ import { Link } from "@tanstack/react-router";
 
 import { ArchiveIcon, PlayIcon, SearchIcon, TranscriptIcon, UnarchiveIcon } from "./icons";
 import { formatDate, formatDuration } from "../lib/format";
-import type { Episode } from "../types";
+import { kebabCase } from "../lib/kebab";
+import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
+import type { EpisodeListItem } from "../types";
 
 type Props = {
-  episodes: Episode[];
+  episodes: EpisodeListItem[];
   /** Total matching the current query in the DB — can exceed episodes.length. */
   total: number;
   /** Current search text (controlled by the parent, which queries the server). */
@@ -13,13 +15,13 @@ type Props = {
   onQueryChange: (q: string) => void;
   /** True while a debounced server search is in flight. */
   searching: boolean;
-  onPlay: (e: Episode) => void;
+  onPlay: (e: EpisodeListItem) => void;
   /** Archive / un-archive an episode (hidden from the default list). */
-  onToggleArchive: (e: Episode) => void;
+  onToggleArchive: (e: EpisodeListItem) => void;
   /** Episode id with an archive request in flight (button disabled). */
   archivePendingId: string | null;
   /** Start a transcription job for an episode without a transcript. */
-  onDownloadTranscript: (e: Episode) => void;
+  onDownloadTranscript: (e: EpisodeListItem) => void;
   /** Episode id with a transcribe request in flight (button disabled). */
   transcriptPendingId: string | null;
   /** Episode ids queued for transcription this session (no transcript yet). */
@@ -27,6 +29,8 @@ type Props = {
   /** Whether archived episodes are currently included in the list. */
   showArchived: boolean;
   onShowArchivedChange: (v: boolean) => void;
+  /** Render the parent podcast under each title (all-episodes page). */
+  showPodcast?: boolean;
   hasMore: boolean;
   loadingMore: boolean;
   loadError: string | null;
@@ -47,6 +51,7 @@ export default function EpisodeList({
   transcriptStartedIds,
   showArchived,
   onShowArchivedChange,
+  showPodcast = false,
   hasMore,
   loadingMore,
   loadError,
@@ -105,13 +110,55 @@ export default function EpisodeList({
             key={e.id}
             className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6 ${e.archived ? "opacity-50" : ""}`}
           >
-            <Link
-              to="/player/$episodeId"
-              params={{ episodeId: e.id }}
-              className="min-w-0 basis-full truncate text-[15px] font-medium no-underline hover:underline sm:basis-auto sm:flex-1"
-            >
-              {e.title}
-            </Link>
+            {showPodcast ? (
+              <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto sm:flex-1 sm:gap-4">
+                <Link
+                  to="/$slug/$id"
+                  params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
+                  className="shrink-0 no-underline"
+                  aria-label={e.podcast.title}
+                >
+                  {e.podcast.imageUrl ? (
+                    <img
+                      src={podcastImageUrl(e.podcast.id, 96)}
+                      srcSet={podcastImageSrcSet(e.podcast.id, 96, 256)}
+                      alt=""
+                      width={48}
+                      height={48}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-12 w-12 rounded-md object-cover"
+                    />
+                  ) : (
+                    <span aria-hidden className="block h-12 w-12 rounded-md bg-base-300" />
+                  )}
+                </Link>
+                <div className="min-w-0">
+                  <Link
+                    to="/player/$episodeId"
+                    params={{ episodeId: e.id }}
+                    className="block truncate text-[15px] font-medium no-underline hover:underline"
+                  >
+                    {e.title}
+                  </Link>
+                  <Link
+                    to="/$slug/$id"
+                    params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
+                    className="mt-0.5 block truncate text-xs text-base-content/50 no-underline hover:text-primary hover:underline"
+                  >
+                    {e.podcast.title}
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <Link
+                to="/player/$episodeId"
+                params={{ episodeId: e.id }}
+                className="min-w-0 basis-full truncate text-[15px] font-medium no-underline hover:underline sm:basis-auto sm:flex-1"
+              >
+                {e.title}
+              </Link>
+            )}
             <span className="shrink-0 text-sm text-base-content/60 sm:w-28 sm:text-right">
               {e.publishedAt ? formatDate(e.publishedAt) : ""}
             </span>

@@ -5,5 +5,7 @@ export type {
   Podcast,
   PodcastList,
   Episode,
+  EpisodePodcast,
+  EpisodeListItem,
   EpisodeDetail,
 } from "@podsub/schemas";

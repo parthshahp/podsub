@@ -84,10 +84,24 @@ export const ListEpisodesQuerySchema = z.object({
   q: z.string().trim().max(200).optional().default(""),
   /** When true, archived episodes are included; otherwise they are hidden. */
   includeArchived: z.coerce.boolean().optional().default(false),
+  /** Optional podcast scope; omit to list episodes across all podcasts. */
+  podcastId: z.string().optional(),
+});
+
+/** Parent podcast summary joined into episode list rows. */
+export const EpisodePodcastSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  imageUrl: z.string().nullable(),
+});
+
+/** An episode plus its parent podcast — the shape of every list row. */
+export const EpisodeListItemSchema = EpisodeSchema.extend({
+  podcast: EpisodePodcastSchema,
 });
 
 export const EpisodeListSchema = z.object({
-  episodes: z.array(EpisodeSchema),
+  episodes: z.array(EpisodeListItemSchema),
   total: z.number().int(),
   limit: z.number().int(),
   offset: z.number().int(),
@@ -96,7 +110,7 @@ export const EpisodeListSchema = z.object({
 /** GET /api/podcasts/:id — podcast info plus its first page of episodes. */
 export const PodcastDetailSchema = z.object({
   podcast: PodcastSchema,
-  episodes: z.array(EpisodeSchema),
+  episodes: z.array(EpisodeListItemSchema),
   total: z.number().int(),
   limit: z.number().int(),
   offset: z.number().int(),
@@ -150,6 +164,8 @@ export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Podcast = z.infer<typeof PodcastSchema>;
 export type PodcastList = z.infer<typeof PodcastListSchema>;
 export type Episode = z.infer<typeof EpisodeSchema>;
+export type EpisodePodcast = z.infer<typeof EpisodePodcastSchema>;
+export type EpisodeListItem = z.infer<typeof EpisodeListItemSchema>;
 export type EpisodeDetail = z.infer<typeof EpisodeDetailSchema>;
 export type ArchiveEpisodeInput = z.infer<typeof ArchiveEpisodeInputSchema>;
 export type ListEpisodesQuery = z.infer<typeof ListEpisodesQuerySchema>;

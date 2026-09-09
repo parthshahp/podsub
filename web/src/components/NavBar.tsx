@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { GearIcon } from "./icons";
+import { GearIcon, ListIcon } from "./icons";
 
 export default function NavBar() {
   return (
@@ -8,6 +8,14 @@ export default function NavBar() {
         PodSub
       </Link>
       <nav className="ml-auto flex items-center gap-2">
+        <Link
+          to="/episodes"
+          className="btn btn-ghost btn-circle btn-sm"
+          aria-label="All episodes"
+          title="All episodes"
+        >
+          <ListIcon className="h-5 w-5" />
+        </Link>
         <Link
           to="/settings"
           className="btn btn-ghost btn-circle btn-sm"

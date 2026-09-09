@@ -3,6 +3,7 @@ import { appendWordToLine, groupWordsIntoLines } from "../transcription/index.js
 import { getSegmentedLines } from "../transcription/segment.js";
 import type {
   Episode,
+  EpisodeListItem,
   Podcast,
   PodcastList,
   TranscribeStatus,
@@ -24,9 +25,14 @@ export type PodcastRow = {
   updated_at: number;
 };
 
-// List queries below add `has_transcript` via a correlated EXISTS
-// (backed by idx_transcript_episode) — no extra round-trip per row.
-export type EpisodeListRow = EpisodeRow & { has_transcript: 0 | 1 };
+// List queries add `has_transcript` via a correlated EXISTS (backed by
+// idx_transcript_episode) and the parent podcast summary via a join — no
+// extra round-trip per row.
+export type EpisodeListItemRow = EpisodeRow & {
+  has_transcript: 0 | 1;
+  podcast_title: string;
+  podcast_image_url: string | null;
+};
 
 export type EpisodeRow = {
   id: string;
@@ -72,54 +78,75 @@ const getPodcastStmt = db.prepare(`
   SELECT * FROM podcast WHERE id = ?
 `);
 
-const listEpisodesStmt = db.prepare(`
-  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
-  FROM podcast_episode
-  WHERE podcast_id = @podcastId AND archived = 0
-  ORDER BY published_at DESC, created_at DESC
-  LIMIT @limit OFFSET @offset
-`);
+// Episode list queries share one template; the podcast filter is optional so
+// the same statements serve both /api/episodes and per-podcast lists. The
+// variant space (podcast × search × archived) is tiny, so prepared statements
+// are cached per generated SQL.
+const episodeStmtCache = new Map<string, ReturnType<typeof db.prepare>>();
 
-const listEpisodesAllStmt = db.prepare(`
-  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
-  FROM podcast_episode WHERE podcast_id = @podcastId
-  ORDER BY published_at DESC, created_at DESC
-  LIMIT @limit OFFSET @offset
-`);
+function cachedPrepare(sql: string): ReturnType<typeof db.prepare> {
+  let stmt = episodeStmtCache.get(sql);
+  if (!stmt) {
+    stmt = db.prepare(sql);
+    episodeStmtCache.set(sql, stmt);
+  }
+  return stmt;
+}
 
-const listEpisodesSearchStmt = db.prepare(`
-  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
-  FROM podcast_episode
-  WHERE podcast_id = @podcastId AND archived = 0 AND title LIKE @like ESCAPE '\\' COLLATE NOCASE
-  ORDER BY published_at DESC, created_at DESC
-  LIMIT @limit OFFSET @offset
-`);
+export type EpisodeListFilters = {
+  /** Omit to list episodes across all podcasts. */
+  podcastId?: string;
+  /** Case-insensitive title filter; empty means no filtering. */
+  q?: string;
+  /** When true, archived episodes are included; otherwise they are hidden. */
+  includeArchived?: boolean;
+};
 
-const listEpisodesSearchAllStmt = db.prepare(`
-  SELECT *, EXISTS (SELECT 1 FROM transcript WHERE episode_id = podcast_episode.id) AS has_transcript
-  FROM podcast_episode
-  WHERE podcast_id = @podcastId AND title LIKE @like ESCAPE '\\' COLLATE NOCASE
-  ORDER BY published_at DESC, created_at DESC
-  LIMIT @limit OFFSET @offset
-`);
+function buildEpisodeListSql(
+  kind: "list" | "count",
+  { podcastId, q, includeArchived }: EpisodeListFilters,
+): string {
+  const where: string[] = [];
+  if (podcastId !== undefined) where.push("e.podcast_id = @podcastId");
+  if (!includeArchived) where.push("e.archived = 0");
+  if ((q ?? "").trim() !== "") where.push("e.title LIKE @like ESCAPE '\\' COLLATE NOCASE");
+  const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
 
-const countEpisodesStmt = db.prepare(`
-  SELECT count(*) AS count FROM podcast_episode WHERE podcast_id = ? AND archived = 0
-`);
+  if (kind === "count") {
+    return `SELECT count(*) AS count FROM podcast_episode e${whereSql}`;
+  }
+  return `
+    SELECT e.*, p.title AS podcast_title, p.image_url AS podcast_image_url,
+      EXISTS (SELECT 1 FROM transcript WHERE episode_id = e.id) AS has_transcript
+    FROM podcast_episode e
+    LEFT JOIN podcast p ON p.id = e.podcast_id${whereSql}
+    ORDER BY e.published_at DESC, e.created_at DESC
+    LIMIT @limit OFFSET @offset
+  `;
+}
 
-const countEpisodesAllStmt = db.prepare(`
-  SELECT count(*) AS count FROM podcast_episode WHERE podcast_id = ?
-`);
+export function listEpisodes(filters: EpisodeListFilters & { limit: number; offset: number }): {
+  rows: EpisodeListItemRow[];
+  total: number;
+} {
+  const params: Record<string, string | number> = {};
+  if (filters.podcastId !== undefined) params.podcastId = filters.podcastId;
+  const needle = (filters.q ?? "").trim();
+  if (needle !== "") {
+    // Escape LIKE metacharacters for a literal substring match.
+    params.like = `%${needle.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  }
 
-const countEpisodesSearchStmt = db.prepare(`
-  SELECT count(*) AS count FROM podcast_episode
-  WHERE podcast_id = ? AND archived = 0 AND title LIKE ? ESCAPE '\\' COLLATE NOCASE
-`);
-
-const countEpisodesSearchAllStmt = db.prepare(`
-  SELECT count(*) AS count FROM podcast_episode
-  WHERE podcast_id = ? AND title LIKE ? ESCAPE '\\' COLLATE NOCASE
-`);
+  const rows = cachedPrepare(buildEpisodeListSql("list", filters)).all({
+    ...params,
+    limit: filters.limit,
+    offset: filters.offset,
+  }) as EpisodeListItemRow[];
+  const { count } = cachedPrepare(buildEpisodeListSql("count", filters)).get(params) as {
+    count: number;
+  };
+  return { rows, total: count };
+}
 
 const getEpisodeStmt = db.prepare(`
   SELECT * FROM podcast_episode WHERE id = ?
@@ -205,32 +232,6 @@ export function getEpisodeWithPodcast(
   const podcast = getPodcast(episode.podcast_id);
   if (!podcast) return undefined;
   return { episode, podcast };
-}
-
-export function listEpisodesForPodcast(
-  podcastId: string,
-  {
-    limit,
-    offset,
-    q,
-    includeArchived,
-  }: { limit: number; offset: number; q?: string; includeArchived?: boolean },
-): { rows: EpisodeListRow[]; total: number } {
-  const needle = q?.trim() ?? "";
-  if (needle === "") {
-    const stmt = includeArchived ? listEpisodesAllStmt : listEpisodesStmt;
-    const counter = includeArchived ? countEpisodesAllStmt : countEpisodesStmt;
-    const rows = stmt.all({ podcastId, limit, offset }) as EpisodeListRow[];
-    const { count } = counter.get(podcastId) as { count: number };
-    return { rows, total: count };
-  }
-  // Escape LIKE metacharacters for a literal substring match.
-  const like = `%${needle.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
-  const stmt = includeArchived ? listEpisodesSearchAllStmt : listEpisodesSearchStmt;
-  const counter = includeArchived ? countEpisodesSearchAllStmt : countEpisodesSearchStmt;
-  const rows = stmt.all({ podcastId, like, limit, offset }) as EpisodeListRow[];
-  const { count } = counter.get(podcastId, like) as { count: number };
-  return { rows, total: count };
 }
 
 const setEpisodeArchivedStmt = db.prepare(`
@@ -322,6 +323,21 @@ export function episodeFromRow(
     archived: row.archived === 1,
     hasTranscript: (row.has_transcript ?? 0) === 1,
     transcribeStatus,
+  };
+}
+
+/** List-row mapper: an episode plus its parent podcast summary. */
+export function episodeListItemFromRow(
+  row: EpisodeListItemRow,
+  transcribeStatus: TranscribeStatus = "idle",
+): EpisodeListItem {
+  return {
+    ...episodeFromRow(row, transcribeStatus),
+    podcast: {
+      id: row.podcast_id,
+      title: row.podcast_title,
+      imageUrl: row.podcast_image_url,
+    },
   };
 }
 
