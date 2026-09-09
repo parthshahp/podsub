@@ -10,6 +10,11 @@ import {
   type AnkiSettings,
   type CardSource,
 } from "../lib/ankiSettings";
+import {
+  TRANSCRIBE_MODEL_OPTIONS,
+  loadTranscriptionModel,
+  saveTranscriptionModel,
+} from "../lib/transcriptionSettings";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -31,6 +36,7 @@ function SettingsPage() {
   const [loadingFields, setLoadingFields] = useState(false);
   const [mappings, setMappings] = useState<Record<string, CardSource>>({});
   const [justSaved, setJustSaved] = useState(false);
+  const [transcribeModel, setTranscribeModel] = useState(loadTranscriptionModel);
 
   // Ref so connect() reads latest state without re-creating on each keystroke.
   const stateRef = useRef({ deck, noteType, mappings });
@@ -131,9 +137,43 @@ function SettingsPage() {
     setTimeout(() => setJustSaved(false), 2000);
   }
 
+  function handleTranscribeModelChange(next: string) {
+    setTranscribeModel(next);
+    saveTranscriptionModel(next);
+  }
+
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-2xl px-6 py-8">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+
+      <section className="mt-6 space-y-6">
+        <div>
+          <h2 className="font-medium">Transcription</h2>
+          <p className="mt-1 text-sm text-base-content/60">
+            Model used for new transcriptions. Trying the other model is worth a shot when one
+            fails on an episode — re-transcribing keeps both results and shows the latest.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <label className="label" htmlFor="transcribe-model">
+            Model
+          </label>
+          <select
+            id="transcribe-model"
+            value={transcribeModel}
+            onChange={(e) => handleTranscribeModelChange(e.target.value)}
+            className="select w-full"
+          >
+            {TRANSCRIBE_MODEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
+      <div className="divider" />
 
       <section className="mt-6 space-y-6">
         <div>

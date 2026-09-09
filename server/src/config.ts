@@ -11,6 +11,17 @@ export const WEB_DIST_DIR = path.join(ROOT, "web", "dist");
 
 export const MODEL = "microsoft/mai-transcribe-2";
 
+// Models the server will accept for transcription (per-request override via
+// POST /api/episodes/:id/transcribe { model }). Transcripts are keyed by
+// (episode_id, model, language) and the latest one wins, so trying a second
+// model never destroys the first transcript.
+export const TRANSCRIBE_MODELS = [MODEL, "qwen/qwen3-asr-1.7b"] as const;
+export type TranscribeModel = (typeof TRANSCRIBE_MODELS)[number];
+
+export function isTranscribeModel(value: string): value is TranscribeModel {
+  return (TRANSCRIBE_MODELS as readonly string[]).includes(value);
+}
+
 // Long audio must be split before sending. Measured ceiling for
 // mai-transcribe-2 via OpenRouter is ~32.5 min/request (larger → HTTP 400
 // "does not support large audio inputs"); 30 min leaves margin. Processing

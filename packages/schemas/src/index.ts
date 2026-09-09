@@ -57,6 +57,12 @@ export const PodcastListSchema = z.object({
  *  - failed: last attempt failed; allow retry via the download action. */
 export const TranscribeStatusSchema = z.enum(["idle", "queued", "running", "failed"]);
 
+/** Body for POST /api/episodes/:id/transcribe — optional model override.
+ *  The server allowlists against its supported models; omit for the default. */
+export const TranscribeEpisodeInputSchema = z.object({
+  model: z.string().trim().min(1).max(200).optional(),
+});
+
 /** Domain shape for an episode (camelCase from the DB row). */
 export const EpisodeSchema = z.object({
   id: z.string(),
@@ -188,3 +194,4 @@ export type CreatePodcastInput = z.infer<typeof CreatePodcastInputSchema>;
 export type AnkiAction = (typeof ANKI_ACTIONS)[number];
 export type AnkiProxyInput = z.infer<typeof AnkiProxyInputSchema>;
 export type TranscribeStatus = z.infer<typeof TranscribeStatusSchema>;
+export type TranscribeEpisodeInput = z.infer<typeof TranscribeEpisodeInputSchema>;

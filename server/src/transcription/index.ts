@@ -95,6 +95,7 @@ async function downloadAudio(episode: EpisodeRow): Promise<string> {
 async function transcribeChunk(
   apiKey: string,
   file: string,
+  model: string,
 ): Promise<{ words?: Word[]; language?: string }> {
   const audio = await readFile(file);
   const res = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
@@ -104,7 +105,7 @@ async function transcribeChunk(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       input_audio: { data: audio.toString("base64"), format: "mp3" },
       response_format: "verbose_json",
       timestamp_granularities: ["segment", "word"],
@@ -138,19 +139,19 @@ async function chunkAudio(file: string, dir: string): Promise<string[]> {
 }
 
 /** Download (cached) → chunk with ffmpeg → transcribe via OpenRouter → persist. */
-export async function transcribeEpisode(episode: EpisodeRow): Promise<Transcript> {
+export async function transcribeEpisode(episode: EpisodeRow, model: string = MODEL): Promise<Transcript> {
   // Hold the cache file so eviction can't delete it mid-pipeline.
   retainAudio(episode.id);
   try {
-    return await transcribeEpisodeInner(episode);
+    return await transcribeEpisodeInner(episode, model);
   } finally {
     releaseAudio(episode.id);
   }
 }
 
-async function transcribeEpisodeInner(episode: EpisodeRow): Promise<Transcript> {
+async function transcribeEpisodeInner(episode: EpisodeRow, model: string): Promise<Transcript> {
   const file = await downloadAudio(episode);
-  console.log(`Transcribing ${file} with ${MODEL}...`);
+  console.log(`Transcribing ${file} with ${model}...`);
 
   const dir = await mkdtemp(path.join(tmpdir(), "podsub-"));
   try {
@@ -164,6 +165,7 @@ async function transcribeEpisodeInner(episode: EpisodeRow): Promise<Transcript> 
       const data = await transcribeChunk(
         process.env.OPENROUTER_API_KEY ?? "",
         path.join(dir, files[i]),
+        model,
       );
       language ??= data.language ?? null;
       const offset = i * CHUNK_SECONDS;
@@ -172,9 +174,9 @@ async function transcribeEpisodeInner(episode: EpisodeRow): Promise<Transcript> 
       }
     }
 
-    const updatedAt = saveTranscript(episode.id, MODEL, language, words);
+    const updatedAt = saveTranscript(episode.id, model, language, words);
     const result: Transcript = {
-      model: MODEL,
+      model,
       updatedAt,
       words,
       lines: groupWordsIntoLines(words),

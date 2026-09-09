@@ -16,9 +16,11 @@ import {
 import {
   ArchiveEpisodeInputSchema,
   ListEpisodesQuerySchema,
+  TranscribeEpisodeInputSchema,
   UpdatePlaybackInputSchema,
 } from "@podsub/schemas";
 import { transcribeEpisode } from "../transcription/index.js";
+import { MODEL, isTranscribeModel } from "../config.js";
 import { getJob, getTranscribeError, getTranscribeStatus, setJob } from "../transcription/jobs.js";
 import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
 import {
@@ -75,10 +77,24 @@ export const episodeRoutes = new Hono()
     return c.json(detail);
   })
   // Background download + transcription; poll GET /transcript until it 200s.
-  .post("/:id/transcribe", (c) => {
+  // Accepts an optional { model } override (allowlisted server-side); without
+  // it the default model is used. Empty/missing body stays on the default so
+  // older clients keep working.
+  .post("/:id/transcribe", async (c) => {
     const id = c.req.param("id");
     const row = getEpisodeWithPodcast(id);
     if (!row) return c.json({ error: "Not found" }, 404);
+
+    const raw = await c.req.json().catch(() => null);
+    const parsed = TranscribeEpisodeInputSchema.safeParse(raw ?? {});
+    if (!parsed.success) {
+      return c.json({ error: "Expected body { model?: string }" }, 400);
+    }
+    const requested = parsed.data.model;
+    if (requested !== undefined && !isTranscribeModel(requested)) {
+      return c.json({ error: `Unknown transcription model: ${requested}` }, 400);
+    }
+    const model = requested ?? MODEL;
 
     const job = getJob(id);
     if (job && (job.status === "queued" || job.status === "running")) {
@@ -86,7 +102,7 @@ export const episodeRoutes = new Hono()
     }
 
     setJob(id, { status: "running" });
-    void transcribeEpisode(row.episode)
+    void transcribeEpisode(row.episode, model)
       .then(() => {
         setJob(id, { status: "done" });
       })
