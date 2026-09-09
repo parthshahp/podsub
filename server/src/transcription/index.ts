@@ -125,6 +125,12 @@ async function chunkAudio(file: string, dir: string): Promise<string[]> {
     "error",
     "-i",
     file,
+    // Drop cover art / video streams and keep the first audio stream only:
+    // otherwise the segment muxer re-muxes the JPEG into every chunk,
+    // inflating each request ~2× and tripping the provider's size gate.
+    "-vn",
+    "-map",
+    "0:a:0",
     "-f",
     "segment",
     "-segment_time",
