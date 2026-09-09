@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { ArchiveIcon, PlayIcon, SearchIcon, TranscriptIcon, UnarchiveIcon } from "./icons";
-import { formatDate, formatDuration } from "../lib/format";
+import { formatClock, formatDate, formatDuration } from "../lib/format";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
 import type { EpisodeListItem } from "../types";
@@ -36,6 +36,47 @@ type Props = {
   loadError: string | null;
   onLoadMore: () => void;
 };
+
+/** Below this, a position reads as unplayed (mirrors the server threshold). */
+const UNPLAYED_THRESHOLD_SEC = 5;
+
+function isInProgress(e: EpisodeListItem): boolean {
+  return !e.archived && (e.positionSec ?? 0) >= UNPLAYED_THRESHOLD_SEC;
+}
+
+/**
+ * Resume/Played line under each episode title. Archived always means played
+ * (archiving clears the position server-side), so archived rows show a
+ * static badge while active rows with a position show remaining + bar.
+ */
+function EpisodeProgressLine({ e }: { e: EpisodeListItem }) {
+  if (e.archived) {
+    return <span className="mt-0.5 block text-xs text-base-content/50">Played</span>;
+  }
+  const pos = e.positionSec ?? 0;
+  if (pos < UNPLAYED_THRESHOLD_SEC) return null;
+  const dur = e.durationSec ?? null;
+  const remaining = dur != null ? Math.max(0, dur - pos) : null;
+  const frac = dur != null && dur > 0 ? Math.min(1, Math.max(0, pos / dur)) : null;
+  return (
+    <span className="mt-0.5 block">
+      <span className="text-xs text-primary">
+        {remaining != null ? `${formatClock(remaining)} left` : `Resume from ${formatClock(pos)}`}
+      </span>
+      {frac != null && (
+        <span
+          aria-hidden="true"
+          className="mt-1 block h-1 w-32 overflow-hidden rounded-full bg-base-300"
+        >
+          <span
+            className="block h-full rounded-full bg-primary"
+            style={{ width: `${Math.round(frac * 100)}%` }}
+          />
+        </span>
+      )}
+    </span>
+  );
+}
 
 export default function EpisodeList({
   episodes,
@@ -148,16 +189,20 @@ export default function EpisodeList({
                   >
                     {e.podcast.title}
                   </Link>
+                  <EpisodeProgressLine e={e} />
                 </div>
               </div>
             ) : (
-              <Link
-                to="/player/$episodeId"
-                params={{ episodeId: e.id }}
-                className="min-w-0 basis-full truncate text-[15px] font-medium no-underline hover:underline sm:basis-auto sm:flex-1"
-              >
-                {e.title}
-              </Link>
+              <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+                <Link
+                  to="/player/$episodeId"
+                  params={{ episodeId: e.id }}
+                  className="block truncate text-[15px] font-medium no-underline hover:underline"
+                >
+                  {e.title}
+                </Link>
+                <EpisodeProgressLine e={e} />
+              </div>
             )}
             <span className="shrink-0 text-sm text-base-content/60 sm:w-28 sm:text-right">
               {e.publishedAt ? formatDate(e.publishedAt) : ""}
@@ -222,7 +267,8 @@ export default function EpisodeList({
               <button
                 className="btn btn-ghost btn-circle min-h-11 min-w-11"
                 onClick={() => onPlay(e)}
-                aria-label={`Play ${e.title}`}
+                aria-label={isInProgress(e) ? `Resume ${e.title}` : `Play ${e.title}`}
+                title={isInProgress(e) ? "Resume from where you left off" : undefined}
               >
                 <PlayIcon className="h-5 w-5" />
               </button>

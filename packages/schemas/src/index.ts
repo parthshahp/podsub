@@ -68,8 +68,11 @@ export const EpisodeSchema = z.object({
   durationSec: z.number().nullable(),
   publishedAt: z.iso.datetime().nullable(),
   episodeType: z.enum(["full", "trailer", "bonus"]).nullable(),
-  /** True when the user archived the episode (hidden from the default list). */
+  /** True when the user archived the episode (hidden from the default list).
+   *  Archiving counts as played and clears any saved resume position. */
   archived: z.boolean(),
+  /** Resume point in seconds. Always 0 when archived; <5s reads as unplayed. */
+  positionSec: z.number().min(0).default(0),
   /** True when at least one transcript row exists for the episode. */
   hasTranscript: z.boolean(),
   /** Live queue state from the server job registry (resets on restart). */
@@ -121,6 +124,15 @@ export const ArchiveEpisodeInputSchema = z.object({
   archived: z.boolean(),
 });
 
+/** Body for PATCH /api/episodes/:id/playback — save resume position and
+ *  optionally backfill duration from the <audio> element's metadata. */
+export const UpdatePlaybackInputSchema = z.object({
+  /** Current playback position; values under 5s are stored as 0 (unplayed). */
+  positionSec: z.number().min(0).max(86400).optional(),
+  /** Real media duration; stored only when the row lacks one or differs by >2s. */
+  durationSec: z.number().positive().max(86400).nullable().optional(),
+});
+
 /** GET /api/episodes/:id — episode with parent podcast and transcript state. */
 export const EpisodeDetailSchema = z.object({
   podcast: PodcastSchema,
@@ -168,6 +180,7 @@ export type EpisodePodcast = z.infer<typeof EpisodePodcastSchema>;
 export type EpisodeListItem = z.infer<typeof EpisodeListItemSchema>;
 export type EpisodeDetail = z.infer<typeof EpisodeDetailSchema>;
 export type ArchiveEpisodeInput = z.infer<typeof ArchiveEpisodeInputSchema>;
+export type UpdatePlaybackInput = z.infer<typeof UpdatePlaybackInputSchema>;
 export type ListEpisodesQuery = z.infer<typeof ListEpisodesQuerySchema>;
 export type EpisodeList = z.infer<typeof EpisodeListSchema>;
 export type PodcastDetail = z.infer<typeof PodcastDetailSchema>;

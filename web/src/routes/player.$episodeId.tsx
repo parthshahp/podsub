@@ -8,6 +8,7 @@ import { TranscriptEmptyState } from "../components/player/TranscriptEmptyState"
 import { TranscriptSection } from "../components/player/TranscriptSection";
 import { useAnkiExport } from "../hooks/useAnkiExport";
 import { useEpisodeTranscript } from "../hooks/useEpisodeTranscript";
+import { usePlaybackProgress } from "../hooks/usePlaybackProgress";
 import { usePlayer } from "../hooks/usePlayer";
 import { kebabCase } from "../lib/kebab";
 
@@ -46,16 +47,12 @@ function EpisodePage() {
   const { state, postError, starting, downloadTranscript } = useEpisodeTranscript(initial);
   const { podcast, episode, transcript, transcribeStatus, transcribeError } = state;
   const slug = kebabCase(podcast.title);
-  const {
-    audioElement,
-    current,
-    duration,
-    togglePlay,
-    seek,
-    subscribeToTime,
-    getTime,
-  } = usePlayer();
+  const { audioElement, audioRef, current, duration, togglePlay, seek, subscribeToTime, getTime } =
+    usePlayer();
   const playing = current?.id === episode.id;
+
+  // Persist resume position server-side; `ended` auto-archives (= played).
+  usePlaybackProgress({ episode, playing, duration, audioRef, subscribeToTime, getTime });
 
   // Memoized so TranscriptLine's memo() holds across playback ticks.
   const lines = useMemo(() => transcript?.lines ?? [], [transcript]);

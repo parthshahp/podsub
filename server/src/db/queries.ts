@@ -46,6 +46,8 @@ export type EpisodeRow = {
   published_at: number | null;
   episode_type: string | null;
   archived: 0 | 1;
+  /** Resume point in seconds; always 0 when archived. */
+  position_sec: number;
   created_at: number;
 };
 
@@ -258,12 +260,65 @@ export function getEpisodeWithPodcast(
 }
 
 const setEpisodeArchivedStmt = db.prepare(`
-  UPDATE podcast_episode SET archived = ? WHERE id = ?
+  UPDATE podcast_episode SET archived = ?, position_sec = 0 WHERE id = ?
 `);
 
-/** Archive (hide) or un-archive an episode. Returns false when not found. */
+/**
+ * Archive (hide = mark played) or un-archive an episode. Archiving always
+ * clears the saved resume position, so un-archiving starts from the
+ * beginning. Returns false when not found.
+ */
 export function setEpisodeArchived(id: string, archived: boolean): boolean {
   return setEpisodeArchivedStmt.run(archived ? 1 : 0, id).changes > 0;
+}
+
+/** Below this, a saved position is stored as 0 and reads as unplayed. */
+const UNPLAYED_THRESHOLD_SEC = 5;
+
+const updatePlaybackPositionStmt = db.prepare(`
+  UPDATE podcast_episode
+  SET position_sec = CASE WHEN archived = 0 THEN ? ELSE 0 END
+  WHERE id = ?
+`);
+
+const updatePlaybackDurationStmt = db.prepare(`
+  UPDATE podcast_episode SET duration_sec = ? WHERE id = ?
+`);
+
+export type PlaybackUpdate = {
+  positionSec?: number;
+  durationSec?: number | null;
+};
+
+/**
+ * Save the resume position and optionally backfill duration from the
+ * <audio> element's metadata. Position saves against archived rows are
+ * ignored (a throttled save landing just after `ended` auto-archives must
+ * not resurrect a position). Returns the fresh row, or undefined when the
+ * episode doesn't exist.
+ */
+export function updateEpisodePlayback(id: string, update: PlaybackUpdate): EpisodeRow | undefined {
+  const current = getEpisodeStmt.get(id) as EpisodeRow | undefined;
+  if (!current) return undefined;
+
+  if (update.durationSec != null) {
+    const prev = current.duration_sec;
+    if (prev == null || Math.abs(prev - update.durationSec) > 2) {
+      updatePlaybackDurationStmt.run(update.durationSec, id);
+      current.duration_sec = update.durationSec;
+    }
+  }
+
+  if (update.positionSec !== undefined) {
+    const duration = current.duration_sec;
+    let position = Math.max(0, update.positionSec);
+    if (duration != null) position = Math.min(position, Math.max(0, duration));
+    if (position < UNPLAYED_THRESHOLD_SEC) position = 0;
+    // The CASE in the statement pins archived rows to 0.
+    updatePlaybackPositionStmt.run(position, id);
+  }
+
+  return getEpisodeStmt.get(id) as EpisodeRow | undefined;
 }
 // SQLite treats NULLs as distinct, so the unique index uses COALESCE(language, '')
 // to keep re-runs with an undetected language updating in place.
@@ -292,7 +347,10 @@ export function upsertPodcast(input: PodcastInput): PodcastRow {
   }) as PodcastRow;
 }
 
-export type EpisodeInput = Omit<EpisodeRow, "id" | "podcast_id" | "created_at" | "archived"> & {
+export type EpisodeInput = Omit<
+  EpisodeRow,
+  "id" | "podcast_id" | "created_at" | "archived" | "position_sec"
+> & {
   podcast_id: string;
 };
 
@@ -344,6 +402,7 @@ export function episodeFromRow(
     publishedAt: row.published_at == null ? null : new Date(row.published_at * 1000).toISOString(),
     episodeType: row.episode_type as Episode["episodeType"],
     archived: row.archived === 1,
+    positionSec: row.position_sec ?? 0,
     hasTranscript: (row.has_transcript ?? 0) === 1,
     transcribeStatus,
   };

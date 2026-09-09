@@ -11,8 +11,13 @@ import {
   listEpisodes,
   podcastFromRow,
   setEpisodeArchived,
+  updateEpisodePlayback,
 } from "../db/queries.js";
-import { ArchiveEpisodeInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
+import {
+  ArchiveEpisodeInputSchema,
+  ListEpisodesQuerySchema,
+  UpdatePlaybackInputSchema,
+} from "@podsub/schemas";
 import { transcribeEpisode } from "../transcription/index.js";
 import { getJob, getTranscribeError, getTranscribeStatus, setJob } from "../transcription/jobs.js";
 import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
@@ -173,7 +178,8 @@ export const episodeRoutes = new Hono()
     if (!transcript) return c.json({ error: "Not found" }, 404);
     return c.json(transcript);
   })
-  // Archive (hide from the default episode list) or un-archive an episode.
+  // Archive (hide = mark played) or un-archive an episode. Archiving clears
+  // the saved resume position, so un-archiving starts from the beginning.
   .patch(
     "/:id/archive",
     zValidator("json", ArchiveEpisodeInputSchema, (result, c) => {
@@ -194,10 +200,43 @@ export const episodeRoutes = new Hono()
           {
             ...row.episode,
             archived: archived ? 1 : 0,
+            // setEpisodeArchived pins position_sec to 0 on every toggle.
+            position_sec: 0,
             has_transcript: present ? 1 : 0,
           },
           getTranscribeStatus(id),
         ),
+      );
+    },
+  )
+  // Save the resume position (and optionally backfill duration from the
+  // <audio> element). Position saves against archived rows are ignored so a
+  // throttled save landing after `ended` auto-archives can't resurrect one.
+  .patch(
+    "/:id/playback",
+    zValidator("json", UpdatePlaybackInputSchema, (result, c) => {
+      if (!result.success) {
+        return c.json(
+          { error: "Expected body { positionSec?: number, durationSec?: number }" },
+          400,
+        );
+      }
+    }),
+    (c) => {
+      const id = c.req.param("id");
+      const row = getEpisodeWithPodcast(id);
+      if (!row) return c.json({ error: "Not found" }, 404);
+
+      const { positionSec, durationSec } = c.req.valid("json");
+      const updated = updateEpisodePlayback(id, {
+        ...(positionSec !== undefined ? { positionSec } : {}),
+        ...(durationSec !== undefined ? { durationSec } : {}),
+      });
+      if (!updated) return c.json({ error: "Not found" }, 404);
+
+      const present = hasTranscript(id);
+      return c.json(
+        episodeFromRow({ ...updated, has_transcript: present ? 1 : 0 }, getTranscribeStatus(id)),
       );
     },
   );

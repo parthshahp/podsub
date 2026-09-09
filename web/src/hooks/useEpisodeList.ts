@@ -191,9 +191,10 @@ export function useEpisodeList({ initial, podcastId }: Options) {
         total: isSearching ? p.total - 1 : p.total,
       }));
     } else {
-      // Archived rows stay visible (faded) while the toggle is on.
+      // Archived rows stay visible (faded) while the toggle is on. Archiving
+      // counts as played and clears the resume position server-side.
       const mark = (list: EpisodeListItem[]) =>
-        list.map((x) => (x.id === ep.id ? { ...x, archived: next } : x));
+        list.map((x) => (x.id === ep.id ? { ...x, archived: next, positionSec: 0 } : x));
       setPage0((p) => {
         const base = p ?? { episodes: initial.episodes, total: initial.total };
         return { ...base, episodes: mark(base.episodes) };

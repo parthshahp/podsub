@@ -21,6 +21,9 @@ export function usePlayer() {
   const currentUrlRef = useRef<string | null>(null);
   const [current, setCurrent] = useState<Episode | null>(null);
   const [duration, setDuration] = useState(0);
+  // Resume offset for a freshly loaded source. <audio> ignores currentTime
+  // before metadata arrives, so this is applied in onLoadedMetadata.
+  const pendingStartRef = useRef<number | null>(null);
 
   // Mutable time store + listener set (the useSyncExternalStore source).
   const timeRef = useRef(0);
@@ -60,7 +63,10 @@ export function usePlayer() {
         // Compare raw strings: audio.src is the absolute resolved URL.
         audio.src = url;
         currentUrlRef.current = e.audioUrl;
-        setTime(0);
+        // Archived rows never carry a position (the server pins them to 0).
+        const startAt = e.archived ? 0 : Math.max(0, e.positionSec ?? 0);
+        pendingStartRef.current = startAt > 0 ? startAt : null;
+        setTime(startAt);
         setDuration(e.durationSec ?? 0);
       }
       setCurrent(e);
@@ -88,7 +94,15 @@ export function usePlayer() {
   );
 
   const handleLoadedMetadata = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
-    setDuration(e.currentTarget.duration || 0);
+    const audio = e.currentTarget;
+    setDuration(audio.duration || 0);
+    // Apply the deferred resume offset now that seeking is possible.
+    const startAt = pendingStartRef.current;
+    pendingStartRef.current = null;
+    if (startAt != null && startAt > 0 && Number.isFinite(audio.duration)) {
+      // Clamp so a stale position at/past the end restarts cleanly.
+      audio.currentTime = Math.min(startAt, Math.max(0, audio.duration - 5));
+    }
   }, []);
 
   const handleEnded = useCallback(() => {
@@ -113,6 +127,7 @@ export function usePlayer() {
 
   return {
     audioElement,
+    audioRef,
     current,
     playingId: current?.id ?? null,
     duration,
