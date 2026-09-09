@@ -28,3 +28,8 @@ export function getTranscribeStatus(episodeId: string): TranscribeStatus {
 export function getTranscribeError(episodeId: string): string | null {
   return jobs.get(episodeId)?.error ?? null;
 }
+
+/** Drop queued/running state for an episode (e.g. its podcast was deleted). */
+export function deleteJob(episodeId: string): void {
+  jobs.delete(episodeId);
+}

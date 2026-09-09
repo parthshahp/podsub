@@ -269,6 +269,26 @@ function episodeIdForEntry(entry: string): string | null {
   return dot === -1 ? null : entry.slice(0, dot);
 }
 
+/** Delete every cached audio file (plus orphaned .part files) for an episode. */
+export async function deleteCachedAudio(episodeId: string): Promise<void> {
+  await Promise.all(
+    Object.keys(MIME_FOR_EXT).map((ext) =>
+      rm(path.join(PODCASTS_DIR, episodeId + ext), { force: true }),
+    ),
+  );
+  let entries: string[];
+  try {
+    entries = await readdir(PODCASTS_DIR);
+  } catch {
+    return; // cache dir doesn't exist yet — nothing to do
+  }
+  await Promise.all(
+    entries
+      .filter((e) => e.startsWith(`${episodeId}.`) && e.endsWith(".part"))
+      .map((e) => rm(path.join(PODCASTS_DIR, e), { force: true })),
+  );
+}
+
 /** Delete cached audio untouched for longer than its TTL. Returns what was removed. */
 export async function sweepAudioCache(now = Date.now()): Promise<{ deleted: string[] }> {
   const deleted: string[] = [];

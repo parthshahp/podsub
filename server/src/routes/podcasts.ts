@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import sharp from "sharp";
 
 import {
+  deletePodcast,
   episodeListItemFromRow,
   getPodcast,
   listEpisodes,
@@ -9,10 +10,11 @@ import {
   podcastFromRow,
 } from "../db/queries.js";
 import { importFeed } from "../feeds/importer.js";
+import { deleteCachedAudio } from "../lib/audio-cache.js";
 import { CreatePodcastInputSchema } from "@podsub/schemas";
 import type { PodcastDetail } from "@podsub/schemas";
 import { cappedBodyStream, readBodyCapped, safeFetch } from "../lib/safe-fetch.js";
-import { getTranscribeStatus } from "../transcription/jobs.js";
+import { getTranscribeStatus, deleteJob } from "../transcription/jobs.js";
 import { listEpisodesValidator } from "./episodes.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -93,6 +95,29 @@ export const podcastRoutes = new Hono()
       offset: query.offset,
     };
     return c.json(detail);
+  })
+  // Hard-delete a podcast: episodes + transcripts cascade in SQLite.
+  // Cached artwork/audio and in-memory transcribe state are purged here
+  // since they live outside the DB.
+  .delete("/:id", async (c) => {
+    const podcast = getPodcast(c.req.param("id"));
+    if (!podcast) return c.json({ error: "Not found" }, 404);
+
+    const { episodeIds } = deletePodcast(podcast.id);
+
+    for (const key of thumbCache.keys()) {
+      if (key.startsWith(`${podcast.id}:`)) thumbCache.delete(key);
+    }
+    for (const episodeId of episodeIds) deleteJob(episodeId);
+    await Promise.all(
+      episodeIds.map((episodeId) =>
+        deleteCachedAudio(episodeId).catch((err) =>
+          console.error(`Audio cleanup failed for episode ${episodeId}:`, err),
+        ),
+      ),
+    );
+
+    return c.json({ deleted: true });
   })
   .get("/:id/image", async (c) => {
     // Artwork proxy: CDNs rarely send CORS headers, and feed-supplied

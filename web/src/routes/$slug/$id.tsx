@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { api } from "../../api";
+import DeletePodcastButton from "../../components/DeletePodcastButton";
 import EpisodeList from "../../components/EpisodeList";
 import PodcastHeader from "../../components/PodcastHeader";
 import { useEpisodeList } from "../../hooks/useEpisodeList";
@@ -41,6 +42,9 @@ function PodcastDetail() {
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8">
+      <div className="mb-2 flex justify-end">
+        <DeletePodcastButton podcastId={podcast.id} podcastTitle={podcast.title} />
+      </div>
       <PodcastHeader podcast={podcast} />
       <EpisodeList
         episodes={list.episodes}

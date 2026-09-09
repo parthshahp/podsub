@@ -78,6 +78,14 @@ const getPodcastStmt = db.prepare(`
   SELECT * FROM podcast WHERE id = ?
 `);
 
+const listEpisodeIdsForPodcastStmt = db.prepare(`
+  SELECT id FROM podcast_episode WHERE podcast_id = ?
+`);
+
+const deletePodcastStmt = db.prepare(`
+  DELETE FROM podcast WHERE id = ?
+`);
+
 // Episode list queries share one template; the podcast filter is optional so
 // the same statements serve both /api/episodes and per-podcast lists. The
 // variant space (podcast × search × archived) is tiny, so prepared statements
@@ -186,6 +194,21 @@ export function listPodcasts(): PodcastList[] {
 
 export function getPodcast(id: string): PodcastRow | undefined {
   return getPodcastStmt.get(id) as PodcastRow | undefined;
+}
+
+/**
+ * Hard-delete a podcast. Episodes + transcripts cascade via
+ * ON DELETE CASCADE (foreign_keys is ON — see db/index.ts).
+ * Returns the removed episode ids so the caller can clean up
+ * on-disk audio outside the transaction.
+ */
+export function deletePodcast(id: string): { deleted: boolean; episodeIds: string[] } {
+  return db.transaction((): { deleted: boolean; episodeIds: string[] } => {
+    const rows = listEpisodeIdsForPodcastStmt.all(id) as Array<{ id: string }>;
+    const episodeIds = rows.map((r) => r.id);
+    const result = deletePodcastStmt.run(id);
+    return { deleted: result.changes > 0, episodeIds };
+  })();
 }
 
 /** Load the most recent transcript, deriving `lines` at read time. */
