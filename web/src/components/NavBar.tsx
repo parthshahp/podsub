@@ -1,5 +1,43 @@
-import { Link } from "@tanstack/react-router";
-import { GearIcon, ListIcon } from "./icons";
+import { Link, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
+
+import { api } from "../api";
+import { GearIcon, ListIcon, SyncIcon } from "./icons";
+
+function SyncButton() {
+  const [syncing, setSyncing] = useState(false);
+  const router = useRouter();
+
+  async function sync() {
+    // Client-side guard for instant UX; the endpoint's 409 is the real
+    // dedup (covers a second tab or overlap with the scheduled run).
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await api.api.podcasts.refresh.$post();
+      if (res.status === 409) return;
+      if (!res.ok) throw new Error(`Sync failed (${res.status})`);
+      await router.invalidate();
+    } catch (err) {
+      console.error("Feed sync failed:", err);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void sync()}
+      disabled={syncing}
+      aria-label="Sync feeds"
+      title="Sync feeds"
+      className="btn btn-ghost btn-circle btn-sm"
+    >
+      <SyncIcon className={`h-5 w-5${syncing ? " animate-spin" : ""}`} />
+    </button>
+  );
+}
 
 export default function NavBar() {
   return (
@@ -8,6 +46,7 @@ export default function NavBar() {
         PodSub
       </Link>
       <nav className="ml-auto flex items-center gap-2">
+        <SyncButton />
         <Link
           to="/episodes"
           className="btn btn-ghost btn-circle btn-sm"

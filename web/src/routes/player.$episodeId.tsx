@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { api } from "../api";
+import PageShell, { pageLoadState } from "../components/PageShell";
 import { EpisodeSidebar } from "../components/player/EpisodeSidebar";
 import { PlayerBar } from "../components/player/PlayerBar";
 import { TranscriptEmptyState } from "../components/player/TranscriptEmptyState";
@@ -27,16 +28,7 @@ export const Route = createFileRoute("/player/$episodeId")({
     if ("error" in tData) throw new Error(tData.error);
     return { ...data, transcript: tData };
   },
-  pendingComponent: () => (
-    <main id="main-content" tabIndex={-1} className="p-6">
-      <p className="text-sm text-base-content/60">Loading episode…</p>
-    </main>
-  ),
-  errorComponent: ({ error }) => (
-    <main id="main-content" tabIndex={-1} className="p-6">
-      <p className="text-sm text-error">Failed to load episode: {error.message}</p>
-    </main>
-  ),
+  ...pageLoadState("episode"),
   component: EpisodePage,
 });
 
@@ -105,7 +97,7 @@ function EpisodePage() {
   return (
     <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden">
       {audioElement}
-      <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <PageShell className="flex min-h-0 flex-1 flex-col md:flex-row">
         <EpisodeSidebar podcast={podcast} episode={episode} slug={slug} />
 
         {transcript ? (
@@ -131,7 +123,7 @@ function EpisodePage() {
             onDownload={() => void downloadTranscript()}
           />
         )}
-      </main>
+      </PageShell>
 
       <PlayerBar
         episode={episode}

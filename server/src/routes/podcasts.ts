@@ -10,6 +10,7 @@ import {
   podcastFromRow,
 } from "../db/queries.js";
 import { importFeed } from "../feeds/importer.js";
+import { isRefreshing, refreshAllFeeds } from "../feeds/refresher.js";
 import { deleteCachedAudio } from "../lib/audio-cache.js";
 import { CreatePodcastInputSchema } from "@podsub/schemas";
 import type { PodcastDetail } from "@podsub/schemas";
@@ -79,6 +80,19 @@ export const podcastRoutes = new Hono()
       console.error("Feed import failed:", err);
       return c.json({ error: "Could not import feed" }, 400);
     }
+  })
+  .post("/refresh", async (c) => {
+    // Manual trigger for the background poller. Synchronous await keeps the
+    // client trivial (spin -> done -> refetch); 409 is the dedup signal when
+    // a scheduled or manual run is already going.
+    if (isRefreshing()) {
+      return c.json({ status: "in-progress" }, 409);
+    }
+    const summary = await refreshAllFeeds("manual");
+    if (summary === null) {
+      return c.json({ status: "in-progress" }, 409);
+    }
+    return c.json({ status: "done", ...summary });
   })
   .get("/:id", listEpisodesValidator, (c) => {
     const query = c.req.valid("query");

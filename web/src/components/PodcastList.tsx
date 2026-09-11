@@ -5,7 +5,7 @@ import { api } from "../api";
 import { SearchIcon } from "./icons";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
-import type { PodcastList } from "../types.ts";
+import type { PodcastList } from "../types";
 
 type Props = {
   filteredPodcasts: PodcastList[];

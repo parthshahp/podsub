@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { api } from "../api";
+import PageShell, { pageLoadState } from "../components/PageShell";
 import PodcastList from "../components/PodcastList";
+
+// List, pending state and error state share one shell so the scroll container
+// doesn't appear and disappear across loads.
+const LIST_SHELL = "min-h-0 flex-1 overflow-y-auto";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -14,12 +19,7 @@ export const Route = createFileRoute("/")({
     const podcasts = await res.json();
     return { podcasts };
   },
-  pendingComponent: () => <PodcastListShell>Loading podcasts…</PodcastListShell>,
-  errorComponent: ({ error }) => (
-    <PodcastListShell>
-      <p className="text-sm text-error">Failed to load podcasts: {error.message}</p>
-    </PodcastListShell>
-  ),
+  ...pageLoadState("podcasts", LIST_SHELL),
   component: () => {
     const { podcasts } = Route.useLoaderData();
     const { q } = Route.useSearch();
@@ -28,17 +28,9 @@ export const Route = createFileRoute("/")({
       return needle ? podcasts.filter((p) => p.title.toLowerCase().includes(needle)) : podcasts;
     }, [podcasts, q]);
     return (
-      <PodcastListShell>
+      <PageShell className={LIST_SHELL}>
         <PodcastList filteredPodcasts={filtered} q={q} />
-      </PodcastListShell>
+      </PageShell>
     );
   },
 });
-
-function PodcastListShell({ children }: { children: React.ReactNode }) {
-  return (
-    <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-      {children}
-    </main>
-  );
-}

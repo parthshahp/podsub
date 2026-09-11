@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { api } from "../api";
 import EpisodeList from "../components/EpisodeList";
+import PageShell, { pageLoadState } from "../components/PageShell";
 import { useEpisodeList } from "../hooks/useEpisodeList";
 
 export const Route = createFileRoute("/episodes")({
@@ -11,16 +12,7 @@ export const Route = createFileRoute("/episodes")({
     if ("error" in data) throw new Error(data.error);
     return data;
   },
-  pendingComponent: () => (
-    <main id="main-content" tabIndex={-1} className="p-6">
-      <p className="text-sm text-base-content/60">Loading episodes…</p>
-    </main>
-  ),
-  errorComponent: ({ error }) => (
-    <main id="main-content" tabIndex={-1} className="p-6">
-      <p className="text-sm text-error">Failed to load episodes: {error.message}</p>
-    </main>
-  ),
+  ...pageLoadState("episodes"),
   component: AllEpisodes,
 });
 
@@ -31,7 +23,7 @@ function AllEpisodes() {
   const list = useEpisodeList({ initial });
 
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8">
+    <PageShell className="mx-auto max-w-5xl px-6 py-8">
       <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">All episodes</h1>
       <EpisodeList
         episodes={list.episodes}
@@ -53,6 +45,6 @@ function AllEpisodes() {
         showArchived={list.showArchived}
         onShowArchivedChange={list.setShowArchived}
       />
-    </main>
+    </PageShell>
   );
 }

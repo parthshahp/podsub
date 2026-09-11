@@ -9,16 +9,26 @@ import { importFeed } from "./importer.js";
 // with the next tick. better-sqlite3 is synchronous, so one flag suffices.
 let refreshing = false;
 
-/** Re-fetch every subscribed feed; one bad feed never aborts the rest. */
-export async function refreshAllFeeds(reason: string): Promise<void> {
+export function isRefreshing(): boolean {
+  return refreshing;
+}
+
+export type FeedRefreshSummary = { ok: number; failed: number; total: number };
+
+/**
+ * Re-fetch every subscribed feed; one bad feed never aborts the rest.
+ * Returns null when another run is already in progress (caller should
+ * answer 409 instead of starting a second run).
+ */
+export async function refreshAllFeeds(reason: string): Promise<FeedRefreshSummary | null> {
   if (refreshing) {
     console.log(`Feed refresh (${reason}): skipped, previous run still going`);
-    return;
+    return null;
   }
   refreshing = true;
   try {
     const feeds = listPodcastFeeds();
-    if (feeds.length === 0) return;
+    if (feeds.length === 0) return { ok: 0, failed: 0, total: 0 };
 
     let ok = 0;
     let failed = 0;
@@ -33,6 +43,7 @@ export async function refreshAllFeeds(reason: string): Promise<void> {
       }
     }
     console.log(`Feed refresh (${reason}): ${ok} ok, ${failed} failed of ${feeds.length}`);
+    return { ok, failed, total: feeds.length };
   } finally {
     refreshing = false;
   }

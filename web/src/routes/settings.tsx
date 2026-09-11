@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
+import PageShell from "../components/PageShell";
 import { getDeckNames, getModelFieldNames, getModelNames, getVersion } from "../lib/anki";
 import {
   CARD_SOURCES,
@@ -152,7 +153,7 @@ function SettingsPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto max-w-2xl px-6 py-8">
+    <PageShell className="mx-auto max-w-2xl px-6 py-8">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
       <section className="mt-6 space-y-6">
@@ -314,6 +315,6 @@ function SettingsPage() {
           </p>
         )}
       </section>
-    </main>
+    </PageShell>
   );
 }

@@ -78,41 +78,46 @@ export const episodeRoutes = new Hono()
   })
   // Background download + transcription; poll GET /transcript until it 200s.
   // Accepts an optional { model } override (allowlisted server-side); without
-  // it the default model is used. Empty/missing body stays on the default so
-  // older clients keep working.
-  .post("/:id/transcribe", async (c) => {
-    const id = c.req.param("id");
-    const row = getEpisodeWithPodcast(id);
-    if (!row) return c.json({ error: "Not found" }, 404);
+  // it the default model is used. A body-less request (no JSON content-type)
+  // still validates as {} and stays on the default so older clients keep
+  // working. The validator is what types the body for the Hono client, so
+  // callers get `json` inferred instead of hand-casting the request input.
+  .post(
+    "/:id/transcribe",
+    zValidator("json", TranscribeEpisodeInputSchema, (result, c) => {
+      if (!result.success) {
+        return c.json({ error: "Expected body { model?: string }" }, 400);
+      }
+    }),
+    (c) => {
+      const id = c.req.param("id");
+      const row = getEpisodeWithPodcast(id);
+      if (!row) return c.json({ error: "Not found" }, 404);
 
-    const raw = await c.req.json().catch(() => null);
-    const parsed = TranscribeEpisodeInputSchema.safeParse(raw ?? {});
-    if (!parsed.success) {
-      return c.json({ error: "Expected body { model?: string }" }, 400);
-    }
-    const requested = parsed.data.model;
-    if (requested !== undefined && !isTranscribeModel(requested)) {
-      return c.json({ error: `Unknown transcription model: ${requested}` }, 400);
-    }
-    const model = requested ?? MODEL;
+      const requested = c.req.valid("json").model;
+      if (requested !== undefined && !isTranscribeModel(requested)) {
+        return c.json({ error: `Unknown transcription model: ${requested}` }, 400);
+      }
+      const model = requested ?? MODEL;
 
-    const job = getJob(id);
-    if (job && (job.status === "queued" || job.status === "running")) {
-      return c.json({ episodeId: id, status: job.status }, 202);
-    }
+      const job = getJob(id);
+      if (job && (job.status === "queued" || job.status === "running")) {
+        return c.json({ episodeId: id, status: job.status }, 202);
+      }
 
-    setJob(id, { status: "running" });
-    void transcribeEpisode(row.episode, model)
-      .then(() => {
-        setJob(id, { status: "done" });
-      })
-      .catch((err) => {
-        setJob(id, { status: "failed", error: String(err) });
-        console.error(`Transcription failed for episode ${id}:`, err);
-      });
+      setJob(id, { status: "running" });
+      void transcribeEpisode(row.episode, model)
+        .then(() => {
+          setJob(id, { status: "done" });
+        })
+        .catch((err) => {
+          setJob(id, { status: "failed", error: String(err) });
+          console.error(`Transcription failed for episode ${id}:`, err);
+        });
 
-    return c.json({ episodeId: id, status: "running" }, 202);
-  })
+      return c.json({ episodeId: id, status: "running" }, 202);
+    },
+  )
   // Same-origin audio proxy: serves both the <audio> element and export
   // fetches, so playback + clipping share the browser HTTP cache.
   .get("/:id/audio", async (c) => {

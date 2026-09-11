@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { api } from "../../api";
 import DeletePodcastButton from "../../components/DeletePodcastButton";
 import EpisodeList from "../../components/EpisodeList";
+import PageShell, { pageLoadState } from "../../components/PageShell";
 import PodcastHeader from "../../components/PodcastHeader";
 import { useEpisodeList } from "../../hooks/useEpisodeList";
 
@@ -13,20 +14,7 @@ export const Route = createFileRoute("/$slug/$id")({
     if ("error" in data) throw new Error(data.error);
     return data;
   },
-  pendingComponent: () => (
-    <>
-      <main id="main-content" tabIndex={-1} className="p-6">
-        <p className="text-sm text-base-content/60">Loading podcast…</p>
-      </main>
-    </>
-  ),
-  errorComponent: ({ error }) => (
-    <>
-      <main id="main-content" tabIndex={-1} className="p-6">
-        <p className="text-sm text-error">Failed to load podcast: {error.message}</p>
-      </main>
-    </>
-  ),
+  ...pageLoadState("podcast"),
   component: PodcastDetail,
 });
 
@@ -41,7 +29,7 @@ function PodcastDetail() {
   });
 
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8">
+    <PageShell className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-2 flex justify-end">
         <DeletePodcastButton podcastId={podcast.id} podcastTitle={podcast.title} />
       </div>
@@ -70,6 +58,6 @@ function PodcastDetail() {
         showArchived={list.showArchived}
         onShowArchivedChange={list.setShowArchived}
       />
-    </main>
+    </PageShell>
   );
 }
