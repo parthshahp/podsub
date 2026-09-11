@@ -34,6 +34,13 @@ export type AnkiSettings = {
 
 const STORAGE_KEY = "ankiSettings";
 
+/** Drops field mappings whose card source is no longer a known one. */
+function sanitizeMappings(mappings: Record<string, CardSource>): Record<string, CardSource> {
+  return Object.fromEntries(
+    Object.entries(mappings).filter(([, source]) => CARD_SOURCES.includes(source)),
+  );
+}
+
 export function loadAnkiSettings(): AnkiSettings {
   const defaults: AnkiSettings = {
     deck: "",
@@ -48,7 +55,8 @@ export function loadAnkiSettings(): AnkiSettings {
     return {
       deck: parsed.deck ?? "",
       noteType: parsed.noteType ?? "",
-      mappings: parsed.mappings ?? {},
+      // A stale source would make buildNote write `undefined` into a field.
+      mappings: sanitizeMappings(parsed.mappings ?? {}),
     };
   } catch {
     return defaults;
@@ -56,5 +64,9 @@ export function loadAnkiSettings(): AnkiSettings {
 }
 
 export function saveAnkiSettings(settings: AnkiSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Non-fatal: private browsing and disabled/full storage reject writes.
+  }
 }

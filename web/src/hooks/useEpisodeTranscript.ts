@@ -8,19 +8,35 @@ import type { EpisodeDetail, Transcript } from "../types";
 export type EpisodeLoaderData = EpisodeDetail & { transcript: Transcript | null };
 
 /**
- * Transcript lifecycle for the player route: polls episode status while no
- * transcript exists and merges refreshes into state.
+ * Transcript lifecycle for the player route: polls episode status while a job
+ * is queued/running and merges refreshes into state.
  */
 export function useEpisodeTranscript(initial: EpisodeLoaderData) {
   const [state, setState] = useState(initial);
-  useEffect(() => setState(initial), [initial]);
-  const { episode, transcript } = state;
+  // Same-route param changes reuse this component, so state is re-seeded by
+  // hand when the loader hands over a *different* episode. Comparing ids rather
+  // than the payload matters: the router also reloads a matched route in the
+  // background (cached/preloaded data never counts as fresh), and every run
+  // installs a brand-new loader payload — so a reset keyed on the payload wipes
+  // the optimistic state below (a just-started transcription, the transcript
+  // already polled). Post-mount freshness is the polling effect's job.
+  // Re-seeding during render (React replays it before committing) keeps the
+  // previous episode's data from ever painting.
+  if (state.episode.id !== initial.episode.id) {
+    setState(initial);
+  }
+  const { episode, transcript, transcribeStatus } = state;
   const [postError, setPostError] = useState<string | null>(null);
   // Disabled while in flight so double-clicks can't submit duplicate jobs.
   const [starting, setStarting] = useState(false);
+  // Only queued/running can finish on their own. Polling in the terminal
+  // states (idle = no job, failed = error already surfaced) would tick
+  // forever without ever changing the UI; those fall back to the manual
+  // "Download transcript now" button in TranscriptEmptyState.
+  const transcribing = transcribeStatus === "queued" || transcribeStatus === "running";
 
   useEffect(() => {
-    if (transcript) return;
+    if (transcript || !transcribing) return;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -44,7 +60,7 @@ export function useEpisodeTranscript(initial: EpisodeLoaderData) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [transcript, episode.id]);
+  }, [transcript, transcribing, episode.id]);
 
   // POST returns 202 once registered; polling drives the UI from there.
   const downloadTranscript = useCallback(async () => {

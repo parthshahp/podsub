@@ -38,6 +38,13 @@ export const AUDIO_CACHE_TTL_MS = 1 * 60 * 60 * 1000;
 // Sweep interval. Crash-orphaned partials are reaped sooner (PART_ORPHAN_MS).
 export const AUDIO_CACHE_SWEEP_MS = 2 * 60 * 60 * 1000;
 
+// How often all subscribed feeds are re-fetched for new episodes.
+// Sequential and failure-isolated per feed, so a few dozen shows is cheap.
+export const FEED_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+// Delay after boot before the first refresh, so the server starts fast.
+export const FEED_REFRESH_STARTUP_DELAY_MS = 30_000;
+
 // Group words into display lines after this many seconds without punctuation.
 export const MAX_LINE_SECONDS = 12;
 

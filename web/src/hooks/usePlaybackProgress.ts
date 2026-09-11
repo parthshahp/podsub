@@ -47,6 +47,10 @@ async function patchPlayback(id: string, body: { positionSec?: number; durationS
  *   server-side; further saves stop from there.
  * - Backfills `durationSec` from <audio> metadata when the row lacks one.
  *
+ * Same-route param changes swap episodes under this hook rather than
+ * remounting it, so the completion latch and the saved-position watermark are
+ * reset whenever the episode changes.
+ *
  * Subscribes to nothing that re-renders: all clocks are read via getTime().
  */
 export function usePlaybackProgress({
@@ -65,6 +69,18 @@ export function usePlaybackProgress({
   liveRef.current = { playing, duration };
   const episodeRef = useRef(episode);
   episodeRef.current = episode;
+
+  // A same-route param change swaps in another episode without remounting, so
+  // the previous episode's latch and watermark must go: otherwise `completed`
+  // (set by `ended`) would silence every save path for the new episode, and
+  // `saved` would measure this episode's movement from the wrong position.
+  // Declared first so the reset lands before the effects below install the
+  // timer and listeners for the new episode. Reads the episode through the ref
+  // so a revalidated payload for the *same* episode can't reset the watermark.
+  useEffect(() => {
+    completedRef.current = false;
+    savedRef.current = episodeRef.current.positionSec ?? 0;
+  }, [episode.id]);
 
   // Periodic save while playing.
   useEffect(() => {

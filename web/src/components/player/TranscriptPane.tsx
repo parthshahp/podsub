@@ -18,8 +18,10 @@ type TranscriptPaneProps = {
   onWordOver: MouseEventHandler<HTMLOListElement>;
   onWordOut: MouseEventHandler<HTMLOListElement>;
   onWordClick: MouseEventHandler<HTMLOListElement>;
+  /** Wheel/touch move — unambiguously the user. */
   onUserScroll: () => void;
-  onScrollHide: () => void;
+  /** Every `scroll` event on the pane, ours and the user's alike. */
+  onScroll: () => void;
   onResumeFollow: () => void;
 };
 
@@ -49,7 +51,7 @@ export const TranscriptPane = memo(function TranscriptPane({
   onWordOut,
   onWordClick,
   onUserScroll,
-  onScrollHide,
+  onScroll,
   onResumeFollow,
 }: TranscriptPaneProps) {
   return (
@@ -60,7 +62,7 @@ export const TranscriptPane = memo(function TranscriptPane({
         className="h-full list-none overflow-y-auto p-3 sm:p-6"
         onWheel={onUserScroll}
         onTouchMove={onUserScroll}
-        onScroll={onScrollHide}
+        onScroll={onScroll}
         onMouseOver={onWordOver}
         onMouseOut={onWordOut}
         onClick={onWordClick}

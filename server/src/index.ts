@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 
 import app from "./app.js";
 import { AUDIO_CACHE_SWEEP_MS } from "./config.js";
+import { startFeedRefresher } from "./feeds/refresher.js";
 import { sweepAudioCache } from "./lib/audio-cache.js";
 
 async function runAudioSweep(reason: string): Promise<void> {
@@ -21,6 +22,9 @@ const sweepTimer = setInterval(() => void runAudioSweep("scheduled"), AUDIO_CACH
 sweepTimer.unref();
 // Sweep at boot too: crash-orphaned partial downloads exist then.
 void runAudioSweep("startup");
+
+// Background feed polling: new episodes appear without re-adding the show.
+startFeedRefresher();
 
 serve(
   {

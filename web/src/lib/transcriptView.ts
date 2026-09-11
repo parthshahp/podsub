@@ -6,13 +6,33 @@ import { TAIL_SEC, blobToBase64 } from "./audioClip";
  * back to Intl.Segmenter for lines without them. */
 export type TranscriptLineData = { start: number; text: string; tokens?: LineToken[] };
 
+type AnimateScrollOptions = {
+  duration?: number;
+  /**
+   * Called with every position this animation writes, already read back
+   * (so clamped to the scrollable range). Lets the caller tell its own
+   * scrolls from the user's in a `scroll` handler.
+   */
+  onWrite?: (top: number) => void;
+};
+
 /** Ease-in-out cubic scroll; re-invoking cancels the previous run. */
-export function animateScrollTo(container: HTMLElement, target: number, duration = 300) {
+export function animateScrollTo(
+  container: HTMLElement,
+  target: number,
+  { duration = 300, onWrite }: AnimateScrollOptions = {},
+) {
   const start = container.scrollTop;
   const delta = target - start;
+  // Report the post-clamp value actually in effect: a target past the end
+  // must not read back as a scroll position we never wrote.
+  const write = (top: number) => {
+    container.scrollTop = top;
+    onWrite?.(container.scrollTop);
+  };
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reducedMotion || duration <= 0 || Math.abs(delta) < 1) {
-    container.scrollTop = target;
+    write(target);
     return () => {};
   }
   let raf = 0;
@@ -20,7 +40,7 @@ export function animateScrollTo(container: HTMLElement, target: number, duration
   function tick(now: number) {
     const t = Math.min((now - t0) / duration, 1);
     const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    container.scrollTop = start + delta * eased;
+    write(start + delta * eased);
     if (t < 1) raf = requestAnimationFrame(tick);
   }
   raf = requestAnimationFrame(tick);

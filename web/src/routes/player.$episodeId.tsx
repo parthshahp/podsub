@@ -61,7 +61,6 @@ function EpisodePage() {
 
   const anki = useAnkiExport({ podcast, episode, slug, lines, words });
 
-  const startedRef = useRef(false);
   // Registered by TranscriptSection; bar seeks resume auto-follow through it.
   const resumeFollowRef = useRef<(() => void) | null>(null);
 
@@ -83,12 +82,16 @@ function EpisodePage() {
   }, [anki.syncAnki]);
 
   // Autoplay on arrival: the navigation click counts as the user gesture.
-  // togglePlay is stable, episode is static — this runs once.
+  // Keyed on the episode id rather than on `episode`, because a same-route
+  // param change (a "next episode" link) reuses this component: the router
+  // only remounts when `remountDeps` says so. `episode` is a fresh object on
+  // every loader revalidation, so keying on it would re-run the effect and
+  // pause mid-episode; keying on the id plays each episode once and — since
+  // togglePlay swaps the <audio> source — stops the previous one.
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     togglePlay(episode);
-  }, [episode, togglePlay]);
+    // `episode` is read from this same render; only its id is the trigger.
+  }, [episode.id, togglePlay]);
 
   // Stacked on narrow screens (compact header → transcript → player bar)
   // so the transcript and player bar stay reachable one-handed; the

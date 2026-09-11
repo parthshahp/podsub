@@ -36,11 +36,19 @@ function SettingsPage() {
   const [loadingFields, setLoadingFields] = useState(false);
   const [mappings, setMappings] = useState<Record<string, CardSource>>({});
   const [justSaved, setJustSaved] = useState(false);
+  const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [transcribeModel, setTranscribeModel] = useState(loadTranscriptionModel);
 
   // Ref so connect() reads latest state without re-creating on each keystroke.
   const stateRef = useRef({ deck, noteType, mappings });
   stateRef.current = { deck, noteType, mappings };
+
+  useEffect(
+    () => () => {
+      if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const saved = loadAnkiSettings();
@@ -133,8 +141,9 @@ function SettingsPage() {
 
   function handleSave() {
     saveAnkiSettings({ deck, noteType, mappings });
+    if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
     setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 2000);
+    justSavedTimerRef.current = setTimeout(() => setJustSaved(false), 2000);
   }
 
   function handleTranscribeModelChange(next: string) {

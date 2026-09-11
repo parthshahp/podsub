@@ -76,6 +76,10 @@ const listPodcastsStmt = db.prepare(`
   SELECT id, title, image_url FROM podcast ORDER BY created_at
 `);
 
+const listPodcastFeedsStmt = db.prepare(`
+  SELECT id, feed_url, title FROM podcast ORDER BY created_at
+`);
+
 const getPodcastStmt = db.prepare(`
   SELECT * FROM podcast WHERE id = ?
 `);
@@ -192,6 +196,11 @@ const upsertEpisodeStmt = db.prepare(`
 export function listPodcasts(): PodcastList[] {
   const rows = listPodcastsStmt.all() as Array<Pick<PodcastRow, "id" | "title" | "image_url">>;
   return rows.map(podcastFromPodcastList);
+}
+
+/** Minimal rows the background refresher needs (id + url, no joins). */
+export function listPodcastFeeds(): Array<Pick<PodcastRow, "id" | "feed_url" | "title">> {
+  return listPodcastFeedsStmt.all() as Array<Pick<PodcastRow, "id" | "feed_url" | "title">>;
 }
 
 export function getPodcast(id: string): PodcastRow | undefined {

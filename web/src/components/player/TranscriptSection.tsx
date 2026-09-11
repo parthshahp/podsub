@@ -61,7 +61,8 @@ export const TranscriptSection = memo(function TranscriptSection({
     () => findActiveLineIndex(lines, getTime()),
   );
 
-  const { containerRef, follow, setFollow, handleUserScroll } = useTranscriptFollow(activeIdx);
+  const { containerRef, follow, setFollow, handleUserScroll, handleScrollDivert } =
+    useTranscriptFollow(activeIdx);
 
   // Let sibling seeks (player bar slider, shortcuts elsewhere) resume follow.
   useEffect(() => {
@@ -160,12 +161,15 @@ export const TranscriptSection = memo(function TranscriptSection({
   );
 
   // The dialog captures its word's rect at open time — keep it anchored
-  // when the pane scrolls, and pause auto-follow while open so playback
-  // doesn't scroll the line away from under the popover.
-  const handleScrollHide = useCallback(() => {
+  // when the pane scrolls and pause auto-follow while open so playback
+  // doesn't scroll the line away from under the popover. The same handler
+  // diverts follow for scrolls we didn't cause ourselves (a scrollbar drag
+  // fires `scroll` but never `wheel`).
+  const handlePaneScroll = useCallback(() => {
     hideHoveredWord();
     refreshDialogRect();
-  }, [hideHoveredWord, refreshDialogRect]);
+    handleScrollDivert();
+  }, [hideHoveredWord, refreshDialogRect, handleScrollDivert]);
 
   const handleResumeFollow = useCallback(() => {
     setFollow(true);
@@ -207,7 +211,7 @@ export const TranscriptSection = memo(function TranscriptSection({
         onWordOut={handleWordOut}
         onWordClick={handleWordClick}
         onUserScroll={handleUserScroll}
-        onScrollHide={handleScrollHide}
+        onScroll={handlePaneScroll}
         onResumeFollow={handleResumeFollow}
       />
       {activeWord && (
