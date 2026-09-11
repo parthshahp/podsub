@@ -263,8 +263,8 @@ const PART_ORPHAN_MS = 60 * 60 * 1000;
 
 // Temp files: `<episodeId>.<ext>.<pid>.part`; ids are UUIDs (no dots).
 function episodeIdForEntry(entry: string): string | null {
-  const m = /^(.+)\.[^.]+\.\d+\.part$/.exec(entry);
-  if (m) return m[1];
+  const [, episodeId] = /^(.+)\.[^.]+\.\d+\.part$/.exec(entry) ?? [];
+  if (episodeId) return episodeId;
   const dot = entry.indexOf(".");
   return dot === -1 ? null : entry.slice(0, dot);
 }

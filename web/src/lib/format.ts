@@ -15,7 +15,18 @@ export function formatClock(sec: number): string {
     : `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** List-style date: "September 3". */
+/**
+ * List-style date: "September 3, 2025".
+ *
+ * Always includes the year: episode lists are sorted newest-first and paginated
+ * through a show's whole back catalogue, so rows from different years sit in the
+ * same fixed-width column — a current-year-only variant would mix two formats
+ * (and two widths) mid-list for no space saving.
+ */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: "long", day: "numeric" });
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }

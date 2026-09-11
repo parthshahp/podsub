@@ -172,7 +172,7 @@ export const DefinitionPopover = memo(function DefinitionPopover({
           <div className="flex items-baseline justify-between gap-2 pr-8">
             <span className="text-base font-medium">{match.word}</span>
             {match.entries.length === 1 ? (
-              <span className="truncate text-xs text-primary/80">{match.entries[0].pinyin}</span>
+              <span className="truncate text-xs text-primary/80">{match.entries[0]?.pinyin}</span>
             ) : (
               <span className="text-xs text-base-content/40">{match.entries.length} entries</span>
             )}

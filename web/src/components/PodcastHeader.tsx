@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { stripHtml } from "../lib/html";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
@@ -7,15 +7,23 @@ import type { Podcast } from "../types";
 export default function PodcastHeader({ podcast }: { podcast: Podcast }) {
   const [expanded, setExpanded] = useState(false);
 
-  const feedHost = (() => {
+  // This header is not memoized and its parent re-renders on every episode
+  // search keystroke and list mutation. Both derivatives are keyed on the raw
+  // prop they come from, so only the first render pays for them.
+  const feedHost = useMemo(() => {
+    // A malformed feed URL degrades to "no link", not to the error boundary.
     try {
       return new URL(podcast.feedUrl).hostname;
     } catch {
       return null;
     }
-  })();
+  }, [podcast.feedUrl]);
 
-  const description = podcast.description ? stripHtml(podcast.description) : "";
+  // DOMParser pass over feed HTML — the expensive half of this render.
+  const description = useMemo(
+    () => (podcast.description ? stripHtml(podcast.description) : ""),
+    [podcast.description],
+  );
   const isLong = description.length > 180;
 
   return (

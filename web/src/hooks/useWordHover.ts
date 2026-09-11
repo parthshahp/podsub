@@ -2,14 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { HoveredWord } from "../components/DefinitionPopover";
 import type { WordHoverInfo } from "../components/WordSpans";
+import { hasFinePointer } from "../lib/mediaQueries";
 
 /** A word opened via click/tap/keyboard, with its invoking element for focus return. */
 export type DialogWord = HoveredWord & { invoker: HTMLElement };
-
-/** True only on devices with a real hover capability (mouse, trackpad). */
-function finePointer(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches;
-}
 
 /**
  * Dictionary popover state: transient hover preview (fine pointers only)
@@ -40,7 +36,7 @@ export function useWordHover() {
   const handleWordEnter = useCallback((info: WordHoverInfo) => {
     // Touch screens fire synthetic mouse events on tap — the tap path
     // (openWord) owns those; hover is a fine-pointer enhancement only.
-    if (!finePointer()) return;
+    if (!hasFinePointer()) return;
     if (hideWordTimerRef.current) clearTimeout(hideWordTimerRef.current);
     if (showWordTimerRef.current) clearTimeout(showWordTimerRef.current);
     showWordTimerRef.current = setTimeout(() => {
@@ -99,6 +95,23 @@ export function useWordHover() {
     const { left, top, bottom, width } = el.getBoundingClientRect();
     setDialogWord((prev) => (prev ? { ...prev, rect: { left, top, bottom, width } } : prev));
   }, []);
+
+  /**
+   * A viewport change is a scroll wearing a different hat: the pane reflows,
+   * so the rect captured at open time drifts off its word, and the popover's
+   * clamp/flip math (read from `window.inner*` at render) goes stale. Do what
+   * the scroll path does — drop the transient hover preview, re-anchor the
+   * open dialog. Browsers already coalesce `resize` to at most one event per
+   * frame, so this needs no extra throttle.
+   */
+  useEffect(() => {
+    function onResize() {
+      hideHoveredWord();
+      refreshDialogRect();
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [hideHoveredWord, refreshDialogRect]);
 
   /** `${lineIndex}:${start}` key of the open dialog word, for aria-expanded. */
   const dialogKey = dialogWord ? `${dialogWord.lineIndex}:${dialogWord.start}` : null;

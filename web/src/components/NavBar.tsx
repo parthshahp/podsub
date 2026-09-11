@@ -42,7 +42,7 @@ function SyncButton() {
 export default function NavBar() {
   return (
     <header className="navbar border-b border-base-300 bg-base-100 px-6">
-      <Link to="/" search={{ q: "" }} className="link link-hover text-lg font-semibold">
+      <Link to="/" className="link link-hover text-lg font-semibold">
         PodSub
       </Link>
       <nav className="ml-auto flex items-center gap-2">

@@ -93,6 +93,11 @@ export function usePlayer() {
     [setTime],
   );
 
+  // Deliberately not the only `loadedmetadata` listener on this element:
+  // usePlaybackProgress attaches its own native listener for the unrelated
+  // `durationSec` server backfill (a persistence side effect that must not
+  // live in this hook). This one owns the player state — duration plus the
+  // deferred resume seek.
   const handleLoadedMetadata = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
     const audio = e.currentTarget;
     setDuration(audio.duration || 0);
@@ -129,7 +134,6 @@ export function usePlayer() {
     audioElement,
     audioRef,
     current,
-    playingId: current?.id ?? null,
     duration,
     togglePlay,
     seek,

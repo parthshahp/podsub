@@ -60,7 +60,8 @@ function snapSize(requested: number): number {
   for (const s of IMAGE_SIZES) {
     if (requested <= s) return s;
   }
-  return IMAGE_SIZES[IMAGE_SIZES.length - 1];
+  // Ascending buckets: an oversized request clamps to the largest one.
+  return Math.max(...IMAGE_SIZES);
 }
 
 export const podcastRoutes = new Hono()

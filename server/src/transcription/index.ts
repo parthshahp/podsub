@@ -165,12 +165,12 @@ async function transcribeEpisodeInner(episode: EpisodeRow, model: string): Promi
     const words: Word[] = [];
     let language: string | null = null;
 
-    for (let i = 0; i < files.length; i++) {
+    for (const [i, file] of files.entries()) {
       if (i > 0) await sleep(CHUNK_DELAY_MS);
       console.log(`Transcribing chunk ${i + 1}/${files.length}...`);
       const data = await transcribeChunk(
         process.env.OPENROUTER_API_KEY ?? "",
-        path.join(dir, files[i]),
+        path.join(dir, file),
         model,
       );
       language ??= data.language ?? null;

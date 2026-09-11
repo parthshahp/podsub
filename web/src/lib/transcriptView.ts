@@ -1,5 +1,6 @@
 import type { LineToken, Word } from "../types";
 import { TAIL_SEC, blobToBase64 } from "./audioClip";
+import { prefersReducedMotion } from "./mediaQueries";
 
 /** A single transcript row: start time plus display text.
  * `tokens` are server-side jieba segments when present; the client falls
@@ -30,8 +31,8 @@ export function animateScrollTo(
     container.scrollTop = top;
     onWrite?.(container.scrollTop);
   };
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reducedMotion || duration <= 0 || Math.abs(delta) < 1) {
+  // Read reduced motion at animation start; the cached list keeps `.matches` live.
+  if (prefersReducedMotion() || duration <= 0 || Math.abs(delta) < 1) {
     write(target);
     return () => {};
   }
@@ -47,14 +48,18 @@ export function animateScrollTo(
   return () => cancelAnimationFrame(raf);
 }
 
-/** End time for line i's clip: last word's end + tail, or the next line's start. */
-export function lineEndSec(i: number, lines: TranscriptLineData[], words: Word[]): number {
-  const nextStart = i + 1 < lines.length ? lines[i + 1].start : Infinity;
+/** End time for a line's clip: last word's end + tail, or the next line's start. */
+export function lineEndSec(
+  line: TranscriptLineData,
+  nextLine: TranscriptLineData | undefined,
+  words: Word[],
+): number {
+  const nextStart = nextLine?.start ?? Infinity;
   let end = 0;
   for (const w of words) {
-    if (w.start >= lines[i].start && w.start < nextStart) end = Math.max(end, w.end);
+    if (w.start >= line.start && w.start < nextStart) end = Math.max(end, w.end);
   }
-  if (end === 0) end = Number.isFinite(nextStart) ? nextStart : lines[i].start + 5;
+  if (end === 0) end = Number.isFinite(nextStart) ? nextStart : line.start + 5;
   return end + TAIL_SEC;
 }
 
@@ -65,7 +70,9 @@ export function findActiveLineIndex(lines: TranscriptLineData[], t: number): num
   let ans = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (lines[mid].start <= t) {
+    // `lo <= mid <= hi` and `hi < lines.length`, so `mid` always indexes a line.
+    const line = lines[mid]!;
+    if (line.start <= t) {
       ans = mid;
       lo = mid + 1;
     } else {

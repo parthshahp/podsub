@@ -116,7 +116,7 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
         const [image, clip] = await Promise.all([
           includeImage ? loadPodcastImage(podcast.id) : Promise.resolve(null),
           includeAudio
-            ? loadAudioClip(episode.id, line.start, lineEndSec(i, lines, words))
+            ? loadAudioClip(episode.id, line.start, lineEndSec(line, lines[i + 1], words))
             : Promise.resolve(null),
         ]);
         const audioFilename = includeAudio

@@ -204,7 +204,9 @@ export default function EpisodeList({
                 <EpisodeProgressLine e={e} />
               </div>
             )}
-            <span className="shrink-0 text-sm text-base-content/60 sm:w-28 sm:text-right">
+            {/* Fixed width keeps the column aligned across rows; wide enough for
+                "September 30, 2025" so the year never wraps onto a second line. */}
+            <span className="shrink-0 text-sm text-base-content/60 sm:w-36 sm:text-right">
               {e.publishedAt ? formatDate(e.publishedAt) : ""}
             </span>
             <span className="shrink-0 text-sm text-base-content/60 tabular-nums sm:w-16 sm:text-right">

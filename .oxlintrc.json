@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // `pnpm lint` runs `oxlint .` from the repo root, so this is the only config.
+  // oxlint's default category is `correctness`, but the `react` plugin — which
+  // owns the `react-hooks/*` rules — is off by default, so neither hook rule ran
+  // before this file existed. The `plugins` field replaces the default set, so
+  // the default plugins are listed explicitly here.
+  "plugins": ["typescript", "unicorn", "oxc", "react"],
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+    // Two intentional stable-deps sites in web/src/routes/player.$episodeId.tsx
+    // are unresolved (see item 26 triage); keep this at `warn` until they are
+    // settled, then promote to `error` alongside the other hook rule.
+    "react-hooks/exhaustive-deps": "warn",
+    // The react plugin's other correctness rules flag intentional patterns that
+    // predate this config (ref-mirroring during render in usePlayer /
+    // usePlaybackShortcuts / usePlaybackProgress / TranscriptSection, and
+    // setState-in-effect in useEpisodeList / DefinitionPopover). Keep this
+    // change scoped to the hook rules rather than flood `pnpm lint` with
+    // pre-existing warnings; those sites belong to their own review items.
+    "react/refs": "off",
+    "react/set-state-in-effect": "off"
+  }
+}

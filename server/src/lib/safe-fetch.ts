@@ -99,8 +99,8 @@ export function isPrivateIp(address: string): boolean {
     }
     case 6: {
       // IPv4-mapped — judge by the embedded v4 address.
-      const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(address);
-      if (mapped) return isPrivateIp(mapped[1]);
+      const [, embedded] = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(address) ?? [];
+      if (embedded) return isPrivateIp(embedded);
       const value = ipv6ToBigInt(address);
       if (value === null) return true; // unparseable -> fail closed
       return IPV6_BLOCKED.some(

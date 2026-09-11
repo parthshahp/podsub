@@ -20,17 +20,19 @@ export const Route = createFileRoute("/")({
     return { podcasts };
   },
   ...pageLoadState("podcasts", LIST_SHELL),
-  component: () => {
-    const { podcasts } = Route.useLoaderData();
-    const { q } = Route.useSearch();
-    const filtered = useMemo(() => {
-      const needle = q?.trim().toLowerCase();
-      return needle ? podcasts.filter((p) => p.title.toLowerCase().includes(needle)) : podcasts;
-    }, [podcasts, q]);
-    return (
-      <PageShell className={LIST_SHELL}>
-        <PodcastList filteredPodcasts={filtered} q={q} />
-      </PageShell>
-    );
-  },
+  component: PodcastsPage,
 });
+
+function PodcastsPage() {
+  const { podcasts } = Route.useLoaderData();
+  const { q } = Route.useSearch();
+  const filtered = useMemo(() => {
+    const needle = q?.trim().toLowerCase();
+    return needle ? podcasts.filter((p) => p.title.toLowerCase().includes(needle)) : podcasts;
+  }, [podcasts, q]);
+  return (
+    <PageShell className={LIST_SHELL}>
+      <PodcastList filteredPodcasts={filtered} q={q} />
+    </PageShell>
+  );
+}

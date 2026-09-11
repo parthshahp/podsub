@@ -4,6 +4,7 @@ import { usePlaybackShortcuts } from "../../hooks/usePlaybackShortcuts";
 import { useTranscriptFollow } from "../../hooks/useTranscriptFollow";
 import { useWordHover } from "../../hooks/useWordHover";
 import type { ExportStatus, WordSelection } from "../../hooks/useAnkiExport";
+import { prefetchDictionary } from "../../lib/dictionary";
 import { findActiveLineIndex, type TranscriptLineData } from "../../lib/transcriptView";
 import type { Episode } from "../../types";
 import type { WordHoverInfo } from "../WordSpans";
@@ -71,6 +72,12 @@ export const TranscriptSection = memo(function TranscriptSection({
       resumeFollowRef.current = null;
     };
   }, [setFollow, resumeFollowRef]);
+
+  // Words are hoverable as soon as this section mounts, so start the 13 MB
+  // dictionary download now (on idle) rather than on the first hover. The
+  // prefetch is cancellable: navigating away before it starts skips it.
+  useEffect(() => prefetchDictionary(), []);
+
   const {
     hoveredWord,
     dialogWord,
