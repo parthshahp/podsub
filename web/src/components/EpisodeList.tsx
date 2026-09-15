@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { ArchiveIcon, PlayIcon, SearchIcon, TranscriptIcon, UnarchiveIcon } from "./icons";
@@ -5,6 +6,18 @@ import { formatClock, formatDate, formatDuration } from "../lib/format";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
 import type { EpisodeListItem } from "../types";
+
+/** A toggle-pill filter rendered under the search bar. Pages pass whichever
+ * filters they support — the all-episodes page passes in-progress,
+ * transcript and archived; the podcast page only archived. Adding a future
+ * filter means appending one entry, no EpisodeList changes. */
+export type EpisodeFilter = {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  active: boolean;
+  onToggle: (next: boolean) => void;
+};
 
 type Props = {
   episodes: EpisodeListItem[];
@@ -26,12 +39,8 @@ type Props = {
   transcriptPendingId: string | null;
   /** Episode ids queued for transcription this session (no transcript yet). */
   transcriptStartedIds: Set<string>;
-  /** Whether archived episodes are currently included in the list. */
-  showArchived: boolean;
-  onShowArchivedChange: (v: boolean) => void;
-  /** When true, only episodes that already have a transcript are listed. */
-  hasTranscriptOnly?: boolean;
-  onHasTranscriptOnlyChange?: (v: boolean) => void;
+  /** Toggle-pill filters rendered under the search bar (empty = no filter row). */
+  filters: EpisodeFilter[];
   /** Render the parent podcast under each title (all-episodes page). */
   showPodcast?: boolean;
   hasMore: boolean;
@@ -93,10 +102,7 @@ export default function EpisodeList({
   onDownloadTranscript,
   transcriptPendingId,
   transcriptStartedIds,
-  showArchived,
-  onShowArchivedChange,
-  hasTranscriptOnly = false,
-  onHasTranscriptOnlyChange,
+  filters,
   showPodcast = false,
   hasMore,
   loadingMore,
@@ -104,6 +110,7 @@ export default function EpisodeList({
   onLoadMore,
 }: Props) {
   const trimmed = query.trim();
+  const anyFilterActive = filters.some((f) => f.active);
   return (
     <>
       <div className="mt-10 flex items-center justify-between gap-3 border-b border-base-300 pb-3 sm:gap-6">
@@ -138,28 +145,26 @@ export default function EpisodeList({
         </span>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/70 select-none">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => onShowArchivedChange(e.target.checked)}
-            className="checkbox checkbox-sm"
-          />
-          Show archived episodes
-        </label>
-        {onHasTranscriptOnlyChange && (
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/70 select-none">
-            <input
-              type="checkbox"
-              checked={hasTranscriptOnly}
-              onChange={(e) => onHasTranscriptOnlyChange(e.target.checked)}
-              className="checkbox checkbox-sm"
-            />
-            Has transcript
-          </label>
-        )}
-      </div>
+      {filters.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Episode filters">
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={f.active}
+              onClick={() => f.onToggle(!f.active)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+                f.active
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-base-300 text-base-content/60 hover:border-base-content/30 hover:text-base-content"
+              }`}
+            >
+              {f.icon}
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <ul className="divide-y divide-base-300">
         {episodes.map((e) => (
@@ -297,8 +302,8 @@ export default function EpisodeList({
           <li className="py-6 text-sm text-base-content/60">
             {trimmed
               ? `No episodes match “${trimmed}”.`
-              : hasTranscriptOnly
-                ? "No episodes with transcripts yet."
+              : anyFilterActive
+                ? "No episodes match these filters."
                 : "No episodes."}
           </li>
         )}

@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { api } from "../api";
 import EpisodeList from "../components/EpisodeList";
+import { ArchiveIcon, PlayIcon, TranscriptIcon } from "../components/icons";
 import PageShell, { pageLoadState } from "../components/PageShell";
 import { useEpisodeList } from "../hooks/useEpisodeList";
 
@@ -42,10 +43,29 @@ function AllEpisodes() {
         onDownloadTranscript={list.downloadTranscript}
         transcriptPendingId={list.transcriptPendingId}
         transcriptStartedIds={list.transcriptStartedIds}
-        showArchived={list.showArchived}
-        onShowArchivedChange={list.setShowArchived}
-        hasTranscriptOnly={list.hasTranscriptOnly}
-        onHasTranscriptOnlyChange={list.setHasTranscriptOnly}
+        filters={[
+          {
+            key: "in-progress",
+            label: "In progress",
+            icon: <PlayIcon className="h-4 w-4" />,
+            active: list.inProgressOnly,
+            onToggle: list.setInProgressOnly,
+          },
+          {
+            key: "has-transcript",
+            label: "Has transcript",
+            icon: <TranscriptIcon className="h-4 w-4" />,
+            active: list.hasTranscriptOnly,
+            onToggle: list.setHasTranscriptOnly,
+          },
+          {
+            key: "show-archived",
+            label: "Show archived",
+            icon: <ArchiveIcon className="h-4 w-4" />,
+            active: list.showArchived,
+            onToggle: list.setShowArchived,
+          },
+        ]}
       />
     </PageShell>
   );

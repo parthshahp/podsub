@@ -94,8 +94,8 @@ const deletePodcastStmt = db.prepare(`
 
 // Episode list queries share one template; the podcast filter is optional so
 // the same statements serve both /api/episodes and per-podcast lists. The
-// variant space (podcast × search × archived) is tiny, so prepared statements
-// are cached per generated SQL.
+// variant space (podcast × search × archived × transcript × progress) is tiny,
+// so prepared statements are cached per generated SQL.
 const episodeStmtCache = new Map<string, ReturnType<typeof db.prepare>>();
 
 function cachedPrepare(sql: string): ReturnType<typeof db.prepare> {
@@ -116,16 +116,22 @@ export type EpisodeListFilters = {
   includeArchived?: boolean;
   /** When true, only episodes that already have a transcript are listed. */
   hasTranscriptOnly?: boolean;
+  /** When true, only in-progress episodes (saved position >= 5s) are listed. */
+  inProgressOnly?: boolean;
 };
 
 function buildEpisodeListSql(
   kind: "list" | "count",
-  { podcastId, q, includeArchived, hasTranscriptOnly }: EpisodeListFilters,
+  { podcastId, q, includeArchived, hasTranscriptOnly, inProgressOnly }: EpisodeListFilters,
 ): string {
   const where: string[] = [];
   if (podcastId !== undefined) where.push("e.podcast_id = @podcastId");
   if (!includeArchived) where.push("e.archived = 0");
   if (hasTranscriptOnly) where.push("EXISTS (SELECT 1 FROM transcript WHERE episode_id = e.id)");
+  // In progress mirrors the client's isInProgress: a saved position at or
+  // above the unplayed threshold. Archived rows always sit at 0 (archiving
+  // clears the position server-side), so they fall out naturally.
+  if (inProgressOnly) where.push(`e.position_sec >= ${UNPLAYED_THRESHOLD_SEC}`);
   if ((q ?? "").trim() !== "") where.push("e.title LIKE @like ESCAPE '\\' COLLATE NOCASE");
   const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
 

@@ -16,7 +16,7 @@ type Options = {
 };
 
 /** Shared state machine behind the podcast and all-episodes pages: debounced
- * server-side search, archived toggle, load-more pagination, and optimistic
+ * server-side search, filter toggles, load-more pagination, and optimistic
  * archive / transcript actions, all against GET /api/episodes. */
 export function useEpisodeList({ initial, podcastId }: Options) {
   // Server-side search: immediate input value plus the debounced API value.
@@ -35,6 +35,8 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   const [showArchived, setShowArchived] = useState(false);
   // When true, only episodes that already have a transcript are listed.
   const [hasTranscriptOnly, setHasTranscriptOnly] = useState(false);
+  // When true, only in-progress episodes (saved position >= 5s) are listed.
+  const [inProgressOnly, setInProgressOnly] = useState(false);
   // Fresh page-0 + total after the archived toggle changes; null means the
   // loader's first page is still current.
   const [page0, setPage0] = useState<EpisodeListPage | null>(null);
@@ -61,12 +63,14 @@ export function useEpisodeList({ initial, podcastId }: Options) {
       q,
       includeArchived,
       hasTranscriptOnly,
+      inProgressOnly,
     }: {
       limit: number;
       offset: number;
       q: string;
       includeArchived: boolean;
       hasTranscriptOnly: boolean;
+      inProgressOnly: boolean;
     }): Promise<EpisodeListPage> => {
       const res = await api.api.episodes.$get({
         query: {
@@ -75,6 +79,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
           ...(q !== "" ? { q } : {}),
           ...(includeArchived ? { includeArchived: "true" } : {}),
           ...(hasTranscriptOnly ? { hasTranscriptOnly: "true" } : {}),
+          ...(inProgressOnly ? { inProgressOnly: "true" } : {}),
           ...(podcastId !== undefined ? { podcastId } : {}),
         },
       });
@@ -99,6 +104,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     setPage0(null);
     setShowArchived(false);
     setHasTranscriptOnly(false);
+    setInProgressOnly(false);
     setTranscriptStartedIds(new Set());
     setTranscriptError(null);
   }, [podcastId]);
@@ -106,8 +112,8 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   // Skip the refetch on first mount — the loader already fetched page 0.
   const firstRender = useRef(true);
 
-  // Re-fetch page 0 when the archived toggle, transcript filter (or scope)
-  // changes, since the loader only fetches the default unfiltered first page.
+  // Re-fetch page 0 when a filter toggle (or scope) changes, since the
+  // loader only fetches the default unfiltered first page.
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
@@ -115,7 +121,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     }
     let cancelled = false;
     setExtraPages([]);
-    fetchPage({ limit: PAGE_SIZE, offset: 0, q: "", includeArchived: showArchived, hasTranscriptOnly })
+    fetchPage({ limit: PAGE_SIZE, offset: 0, q: "", includeArchived: showArchived, hasTranscriptOnly, inProgressOnly })
       .then((page) => {
         if (!cancelled) setPage0(page);
       })
@@ -125,7 +131,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, showArchived, hasTranscriptOnly]);
+  }, [fetchPage, showArchived, hasTranscriptOnly, inProgressOnly]);
 
   // Fetch matching episodes (all pages, not just loaded). Archived episodes
   // are included only when the toggle is on.
@@ -133,7 +139,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     if (!isSearching) return;
     let cancelled = false;
     setSearchError(null);
-    fetchPage({ limit: PAGE_SIZE, offset: 0, q: trimmedSearch, includeArchived: showArchived, hasTranscriptOnly })
+    fetchPage({ limit: PAGE_SIZE, offset: 0, q: trimmedSearch, includeArchived: showArchived, hasTranscriptOnly, inProgressOnly })
       .then((page) => {
         if (!cancelled) setSearchPage(page);
       })
@@ -143,7 +149,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, trimmedSearch, isSearching, showArchived, hasTranscriptOnly]);
+  }, [fetchPage, trimmedSearch, isSearching, showArchived, hasTranscriptOnly, inProgressOnly]);
 
   const page0Episodes = page0?.episodes ?? initial.episodes;
   const page0Total = page0?.total ?? initial.total;
@@ -162,6 +168,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
         q: isSearching ? trimmedSearch : "",
         includeArchived: showArchived,
         hasTranscriptOnly,
+        inProgressOnly,
       });
       if (isSearching) {
         setSearchPage((prev) => ({ ...prev, episodes: [...prev.episodes, ...page.episodes] }));
@@ -272,6 +279,8 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     setShowArchived,
     hasTranscriptOnly,
     setHasTranscriptOnly,
+    inProgressOnly,
+    setInProgressOnly,
     loadMore,
     loadingMore,
     loadError: loadError ?? searchError ?? archiveError ?? transcriptError,
