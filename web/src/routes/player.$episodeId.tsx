@@ -11,6 +11,7 @@ import { useAnkiExport } from "../hooks/useAnkiExport";
 import { useEpisodeTranscript } from "../hooks/useEpisodeTranscript";
 import { usePlaybackProgress } from "../hooks/usePlaybackProgress";
 import { usePlayer } from "../hooks/usePlayer";
+import { useScreenWakeLock } from "../hooks/useScreenWakeLock";
 import { kebabCase } from "../lib/kebab";
 
 export const Route = createFileRoute("/player/$episodeId")({
@@ -42,6 +43,10 @@ function EpisodePage() {
   const { audioElement, audioRef, current, duration, togglePlay, seek, subscribeToTime, getTime } =
     usePlayer();
   const playing = current?.id === episode.id;
+
+  // Keep the screen awake while audio is playing so the transcript stays
+  // readable without taps; released automatically on pause/unmount.
+  useScreenWakeLock(playing);
 
   // Persist resume position server-side; `ended` auto-archives (= played).
   usePlaybackProgress({ episode, playing, duration, audioRef, subscribeToTime, getTime });

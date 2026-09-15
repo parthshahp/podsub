@@ -29,6 +29,9 @@ type Props = {
   /** Whether archived episodes are currently included in the list. */
   showArchived: boolean;
   onShowArchivedChange: (v: boolean) => void;
+  /** When true, only episodes that already have a transcript are listed. */
+  hasTranscriptOnly?: boolean;
+  onHasTranscriptOnlyChange?: (v: boolean) => void;
   /** Render the parent podcast under each title (all-episodes page). */
   showPodcast?: boolean;
   hasMore: boolean;
@@ -92,6 +95,8 @@ export default function EpisodeList({
   transcriptStartedIds,
   showArchived,
   onShowArchivedChange,
+  hasTranscriptOnly = false,
+  onHasTranscriptOnlyChange,
   showPodcast = false,
   hasMore,
   loadingMore,
@@ -133,7 +138,7 @@ export default function EpisodeList({
         </span>
       </div>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
         <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/70 select-none">
           <input
             type="checkbox"
@@ -143,6 +148,17 @@ export default function EpisodeList({
           />
           Show archived episodes
         </label>
+        {onHasTranscriptOnlyChange && (
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/70 select-none">
+            <input
+              type="checkbox"
+              checked={hasTranscriptOnly}
+              onChange={(e) => onHasTranscriptOnlyChange(e.target.checked)}
+              className="checkbox checkbox-sm"
+            />
+            Has transcript
+          </label>
+        )}
       </div>
 
       <ul className="divide-y divide-base-300">
@@ -279,7 +295,11 @@ export default function EpisodeList({
         ))}
         {episodes.length === 0 && (
           <li className="py-6 text-sm text-base-content/60">
-            {trimmed ? `No episodes match “${trimmed}”.` : "No episodes."}
+            {trimmed
+              ? `No episodes match “${trimmed}”.`
+              : hasTranscriptOnly
+                ? "No episodes with transcripts yet."
+                : "No episodes."}
           </li>
         )}
       </ul>

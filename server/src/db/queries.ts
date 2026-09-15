@@ -114,15 +114,18 @@ export type EpisodeListFilters = {
   q?: string;
   /** When true, archived episodes are included; otherwise they are hidden. */
   includeArchived?: boolean;
+  /** When true, only episodes that already have a transcript are listed. */
+  hasTranscriptOnly?: boolean;
 };
 
 function buildEpisodeListSql(
   kind: "list" | "count",
-  { podcastId, q, includeArchived }: EpisodeListFilters,
+  { podcastId, q, includeArchived, hasTranscriptOnly }: EpisodeListFilters,
 ): string {
   const where: string[] = [];
   if (podcastId !== undefined) where.push("e.podcast_id = @podcastId");
   if (!includeArchived) where.push("e.archived = 0");
+  if (hasTranscriptOnly) where.push("EXISTS (SELECT 1 FROM transcript WHERE episode_id = e.id)");
   if ((q ?? "").trim() !== "") where.push("e.title LIKE @like ESCAPE '\\' COLLATE NOCASE");
   const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
 

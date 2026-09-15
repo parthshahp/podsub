@@ -44,6 +44,8 @@ function AllEpisodes() {
         transcriptStartedIds={list.transcriptStartedIds}
         showArchived={list.showArchived}
         onShowArchivedChange={list.setShowArchived}
+        hasTranscriptOnly={list.hasTranscriptOnly}
+        onHasTranscriptOnlyChange={list.setHasTranscriptOnly}
       />
     </PageShell>
   );

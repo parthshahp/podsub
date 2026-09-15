@@ -93,6 +93,8 @@ export const ListEpisodesQuerySchema = z.object({
   q: z.string().trim().max(200).optional().default(""),
   /** When true, archived episodes are included; otherwise they are hidden. */
   includeArchived: z.coerce.boolean().optional().default(false),
+  /** When true, only episodes that already have a transcript are listed. */
+  hasTranscriptOnly: z.coerce.boolean().optional().default(false),
   /** Optional podcast scope; omit to list episodes across all podcasts. */
   podcastId: z.string().optional(),
 });
