@@ -15,7 +15,11 @@ export const MODEL = "microsoft/mai-transcribe-2";
 // POST /api/episodes/:id/transcribe { model }). Transcripts are keyed by
 // (episode_id, model, language) and the latest one wins, so trying a second
 // model never destroys the first transcript.
-export const TRANSCRIBE_MODELS = [MODEL, "qwen/qwen3-asr-1.7b"] as const;
+export const TRANSCRIBE_MODELS = [
+  MODEL,
+  "qwen/qwen3-asr-1.7b",
+  "mistralai/voxtral-small-transcribe-3-0",
+] as const;
 export type TranscribeModel = (typeof TRANSCRIBE_MODELS)[number];
 
 export function isTranscribeModel(value: string): value is TranscribeModel {
