@@ -3,7 +3,9 @@
 Podcast transcription + side-by-side transcript player.
 
 - `server/` — Hono backend: serves audio, transcribes via OpenRouter
-  (`microsoft/mai-transcribe-2`), caches transcripts in `podcasts/`.
+  (`microsoft/mai-transcribe-2` by default), caches transcripts in `podcasts/`.
+  Choose MAI Transcribe 2, Qwen3 ASR 1.7B, or Voxtral Small Transcribe 3.0
+  (`mistralai/voxtral-small-transcribe-3-0`) in Settings.
 - `web/` — React SPA (Vite): podcast list + player with clickable transcript.
 
 ## Prerequisites

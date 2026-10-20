@@ -160,7 +160,7 @@ function SettingsPage() {
         <div>
           <h2 className="font-medium">Transcription</h2>
           <p className="mt-1 text-sm text-base-content/60">
-            Model used for new transcriptions. Trying the other model is worth a shot when one
+            Model used for new transcriptions. Trying another model is worth a shot when one
             fails on an episode — re-transcribing keeps both results and shows the latest.
           </p>
         </div>

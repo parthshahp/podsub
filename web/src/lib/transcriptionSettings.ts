@@ -6,6 +6,7 @@
 export const TRANSCRIBE_MODEL_OPTIONS = [
   { value: "microsoft/mai-transcribe-2", label: "MAI Transcribe 2 (default)" },
   { value: "qwen/qwen3-asr-1.7b", label: "Qwen3 ASR 1.7B" },
+  { value: "mistralai/voxtral-small-transcribe-3-0", label: "Voxtral Small Transcribe 3.0" },
 ] as const;
 
 export const DEFAULT_TRANSCRIBE_MODEL: string = TRANSCRIBE_MODEL_OPTIONS[0].value;
