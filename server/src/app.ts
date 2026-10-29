@@ -17,6 +17,11 @@ const app = new Hono()
 // Serve the built SPA (web/dist) when present. In dev the Vite server owns
 // the UI on :5173, so this is skipped until `pnpm build` has run.
 if (existsSync(path.join(WEB_DIST_DIR, "index.html"))) {
+  // Revalidate the worker on every update check, including behind a proxy.
+  app.use("/sw.js", async (c, next) => {
+    c.header("Cache-Control", "no-cache");
+    await next();
+  });
   app.use("/*", serveStatic({ root: WEB_DIST_DIR }));
   // SPA fallback: unknown non-API paths get index.html; unknown API paths
   // stay JSON 404s instead of silently returning the app shell.
