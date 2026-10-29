@@ -146,7 +146,11 @@ export default function EpisodeList({
       </div>
 
       {filters.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Episode filters">
+        <div
+          className="mt-4 flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Episode filters"
+        >
           {filters.map((f) => (
             <button
               key={f.key}
@@ -268,8 +272,12 @@ export default function EpisodeList({
                 <button
                   className="btn btn-ghost btn-circle min-h-11 min-w-11"
                   onClick={() => onDownloadTranscript(e)}
-                  aria-label={`Download transcript for ${e.title}`}
-                  title="Download transcript"
+                  aria-label={`${e.transcribeStatus === "failed" ? "Retry" : "Download"} transcript for ${e.title}`}
+                  title={
+                    e.transcribeStatus === "failed"
+                      ? "Transcription failed — retry"
+                      : "Download transcript"
+                  }
                 >
                   <TranscriptIcon className="h-5 w-5 opacity-40" />
                 </button>
@@ -298,7 +306,7 @@ export default function EpisodeList({
             </div>
           </li>
         ))}
-        {episodes.length === 0 && (
+        {episodes.length === 0 && !searching && (
           <li className="py-6 text-sm text-base-content/60">
             {trimmed
               ? `No episodes match “${trimmed}”.`
@@ -309,13 +317,18 @@ export default function EpisodeList({
         )}
       </ul>
 
+      {loadError && (
+        <p role="alert" className="mt-4 text-sm text-error">
+          {loadError}
+        </p>
+      )}
+
       {hasMore && (
         <div className="mt-6 flex flex-col items-center gap-2">
-          <button className="btn" onClick={onLoadMore} disabled={loadingMore}>
+          <button className="btn" onClick={onLoadMore} disabled={loadingMore || searching}>
             {loadingMore && <span className="loading loading-spinner loading-sm" />}
             {loadingMore ? "Loading…" : `Load more (${total - episodes.length} more)`}
           </button>
-          {loadError && <p className="text-sm text-error">{loadError}</p>}
         </div>
       )}
     </>

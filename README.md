@@ -33,6 +33,9 @@ pnpm dev
 
 Open http://localhost:5173 (Vite proxies `/api` and `/p` to the backend on :3000).
 
+The player supports 0.75×–2× playback speed and remembers your choice on this device.
+Audio failures include a retry action that keeps your listening position.
+
 ## Other scripts
 
 ```
@@ -72,7 +75,7 @@ audio, or the generated dictionary. Static UI assets are precached per build.
 Updates activate after all existing PodSub windows/tabs close, so a new deployment
 does not reload an active player. Development (`pnpm dev`) does not register a worker.
 
-Run `pnpm --filter @podsub/web test` for dependency-free PWA regression tests.
+Run `pnpm --filter @podsub/web test` for PWA, episode-list, and playback regression tests.
 To check in a browser, build and serve production over HTTPS or localhost, visit
 once, then reload so the worker controls the page. In DevTools → Application,
 check the manifest/icons and activated worker; simulate Offline and open a player

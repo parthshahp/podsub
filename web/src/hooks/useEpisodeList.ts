@@ -27,7 +27,9 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const searching = query !== debouncedQuery;
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const searching = query !== debouncedQuery || searchLoading || browseLoading;
   const trimmedSearch = debouncedQuery.trim();
   const isSearching = trimmedSearch !== "";
 
@@ -55,6 +57,29 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   // Search results replace the paged browse list.
   const [searchPage, setSearchPage] = useState<EpisodeListPage>({ episodes: [], total: 0 });
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  // A new identity invalidates pagination immediately, including during debounce.
+  const selectionKey = JSON.stringify([
+    podcastId,
+    query,
+    showArchived,
+    hasTranscriptOnly,
+    inProgressOnly,
+  ]);
+  const selectionRef = useRef(selectionKey);
+  selectionRef.current = selectionKey;
+  const moreRequestRef = useRef<object | null>(null);
+  useEffect(() => {
+    moreRequestRef.current = null;
+    setLoadingMore(false);
+  }, [selectionKey]);
+
+  useEffect(
+    () => () => {
+      moreRequestRef.current = null;
+    },
+    [],
+  );
 
   const fetchPage = useCallback(
     async ({
@@ -121,12 +146,24 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     }
     let cancelled = false;
     setExtraPages([]);
-    fetchPage({ limit: PAGE_SIZE, offset: 0, q: "", includeArchived: showArchived, hasTranscriptOnly, inProgressOnly })
+    setLoadError(null);
+    setBrowseLoading(true);
+    fetchPage({
+      limit: PAGE_SIZE,
+      offset: 0,
+      q: "",
+      includeArchived: showArchived,
+      hasTranscriptOnly,
+      inProgressOnly,
+    })
       .then((page) => {
         if (!cancelled) setPage0(page);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setBrowseLoading(false);
       });
     return () => {
       cancelled = true;
@@ -136,15 +173,30 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   // Fetch matching episodes (all pages, not just loaded). Archived episodes
   // are included only when the toggle is on.
   useEffect(() => {
-    if (!isSearching) return;
+    if (!isSearching) {
+      setSearchLoading(false);
+      return;
+    }
     let cancelled = false;
     setSearchError(null);
-    fetchPage({ limit: PAGE_SIZE, offset: 0, q: trimmedSearch, includeArchived: showArchived, hasTranscriptOnly, inProgressOnly })
+    setSearchPage({ episodes: [], total: 0 });
+    setSearchLoading(true);
+    fetchPage({
+      limit: PAGE_SIZE,
+      offset: 0,
+      q: trimmedSearch,
+      includeArchived: showArchived,
+      hasTranscriptOnly,
+      inProgressOnly,
+    })
       .then((page) => {
         if (!cancelled) setSearchPage(page);
       })
       .catch((err) => {
         if (!cancelled) setSearchError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setSearchLoading(false);
       });
     return () => {
       cancelled = true;
@@ -158,7 +210,99 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   const shownTotal = isSearching ? searchPage.total : page0Total;
   const hasMore = episodes.length < shownTotal;
 
+  const initialRef = useRef(initial);
+  initialRef.current = initial;
+  const activeJobIds = JSON.stringify(
+    [
+      ...new Set([
+        ...transcriptStartedIds,
+        ...[...page0Episodes, ...extraPages, ...searchPage.episodes]
+          .filter(
+            (ep) =>
+              !ep.hasTranscript &&
+              (ep.transcribeStatus === "queued" || ep.transcribeStatus === "running"),
+          )
+          .map((ep) => ep.id),
+      ]),
+    ].sort(),
+  );
+
+  useEffect(() => {
+    const ids: string[] = JSON.parse(activeJobIds);
+    if (ids.length === 0) return;
+    let cancelled = false;
+    let polling = false;
+    async function poll() {
+      if (polling) return;
+      polling = true;
+      try {
+        const updates = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const res = await api.api.episodes[":id"].$get({ param: { id } });
+              const data = await res.json();
+              if (!res.ok || "error" in data) return null;
+              return data;
+            } catch {
+              return null; // A transient failure is retried on the next tick.
+            }
+          }),
+        );
+        if (cancelled) return;
+        const byId = new Map(
+          updates.flatMap((data) => (data ? [[data.episode.id, data] as const] : [])),
+        );
+        const merge = (rows: EpisodeListItem[]) =>
+          rows.map((ep) => {
+            const data = byId.get(ep.id);
+            return data
+              ? {
+                  ...ep,
+                  hasTranscript: data.hasTranscript,
+                  transcribeStatus: data.transcribeStatus,
+                }
+              : ep;
+          });
+        setPage0((page) => ({
+          ...(page ?? initialRef.current),
+          episodes: merge((page ?? initialRef.current).episodes),
+        }));
+        setExtraPages(merge);
+        setSearchPage((page) => ({ ...page, episodes: merge(page.episodes) }));
+        setTranscriptStartedIds(
+          (prev) =>
+            new Set(
+              [...prev].filter((id) => {
+                const data = byId.get(id);
+                return (
+                  !data ||
+                  (!data.hasTranscript &&
+                    (data.transcribeStatus === "queued" || data.transcribeStatus === "running"))
+                );
+              }),
+            ),
+        );
+        const failed = updates.find((data) => data?.transcribeStatus === "failed");
+        if (failed)
+          setTranscriptError(
+            `Transcription failed for “${failed.episode.title}”: ${failed.transcribeError ?? "Please try again."}`,
+          );
+      } finally {
+        polling = false;
+      }
+    }
+    const timer = setInterval(() => void poll(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeJobIds, podcastId]);
+
   async function loadMore() {
+    if (searching || !hasMore || moreRequestRef.current) return;
+    const request = {};
+    const key = selectionKey;
+    moreRequestRef.current = request;
     setLoadError(null);
     setLoadingMore(true);
     try {
@@ -170,15 +314,21 @@ export function useEpisodeList({ initial, podcastId }: Options) {
         hasTranscriptOnly,
         inProgressOnly,
       });
+      if (selectionRef.current !== key || moreRequestRef.current !== request) return;
       if (isSearching) {
         setSearchPage((prev) => ({ ...prev, episodes: [...prev.episodes, ...page.episodes] }));
       } else {
         setExtraPages((prev) => [...prev, ...page.episodes]);
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      if (selectionRef.current === key && moreRequestRef.current === request) {
+        setLoadError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setLoadingMore(false);
+      if (moreRequestRef.current === request) {
+        moreRequestRef.current = null;
+        setLoadingMore(false);
+      }
     }
   }
 

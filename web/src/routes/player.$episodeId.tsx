@@ -40,8 +40,20 @@ function EpisodePage() {
   const { state, postError, starting, downloadTranscript } = useEpisodeTranscript(initial);
   const { podcast, episode, transcript, transcribeStatus, transcribeError } = state;
   const slug = kebabCase(podcast.title);
-  const { audioElement, audioRef, current, duration, togglePlay, seek, subscribeToTime, getTime } =
-    usePlayer();
+  const {
+    audioElement,
+    audioRef,
+    current,
+    duration,
+    togglePlay,
+    seek,
+    subscribeToTime,
+    getTime,
+    playbackRate,
+    changePlaybackRate,
+    playbackError,
+    retryPlayback,
+  } = usePlayer();
   const playing = current?.id === episode.id;
 
   // Keep the screen awake while audio is playing so the transcript stays
@@ -130,10 +142,23 @@ function EpisodePage() {
         )}
       </PageShell>
 
+      {playbackError && (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center justify-between gap-3 border-t border-base-300 bg-base-100 px-4 py-2 text-sm"
+        >
+          <p className="text-error">{playbackError}</p>
+          <button className="btn btn-sm shrink-0" onClick={retryPlayback}>
+            Retry audio
+          </button>
+        </div>
+      )}
       <PlayerBar
         episode={episode}
         playing={playing}
         max={max}
+        playbackRate={playbackRate}
+        onPlaybackRateChange={changePlaybackRate}
         ankiConnected={anki.ankiConnected}
         syncing={anki.syncing}
         subscribeToTime={subscribeToTime}

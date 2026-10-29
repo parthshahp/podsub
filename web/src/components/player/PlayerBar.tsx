@@ -1,5 +1,6 @@
 import { memo, useCallback, useSyncExternalStore } from "react";
 
+import { PLAYBACK_RATES } from "../../lib/playbackSettings";
 import { formatClock } from "../../lib/format";
 import type { Episode } from "../../types";
 import { PauseIcon, PlayIcon, SkipBack10Icon, SkipForward10Icon, SyncIcon } from "../icons";
@@ -8,6 +9,8 @@ type PlayerBarProps = {
   episode: Episode;
   playing: boolean;
   max: number;
+  playbackRate: number;
+  onPlaybackRateChange: (rate: number) => void;
   ankiConnected: boolean;
   syncing: boolean;
   /** useSyncExternalStore source from usePlayer — the bar is the only
@@ -23,9 +26,9 @@ type PlayerBarProps = {
  * Bottom playback bar. Sticky + elevated above the transcript pane so it
  * stays tappable at the viewport bottom on mobile (the transcript wrapper
  * is positioned, so without a z-index it would paint over this bar).
- * Single row on all screens so play + slider + times stay usable one-handed
- * without stealing transcript height; the slider shrinks while the times
- * stay legible. Bottom padding respects the iOS home indicator safe area.
+ * Controls wrap on narrow screens so the seek slider and speed selector
+ * stay usable without horizontal scrolling. Bottom padding respects the
+ * iOS home indicator safe area.
  *
  * Memoized + self-subscribed: the page passes stable props and never
  * re-renders during playback; only this bar ticks.
@@ -34,6 +37,8 @@ export const PlayerBar = memo(function PlayerBar({
   episode,
   playing,
   max,
+  playbackRate,
+  onPlaybackRateChange,
   ankiConnected,
   syncing,
   subscribeToTime,
@@ -58,7 +63,7 @@ export const PlayerBar = memo(function PlayerBar({
   return (
     <footer
       aria-label="Playback controls"
-      className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-x-3 sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      className="sticky bottom-0 z-30 flex shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-x-3 sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       <button
         className="btn btn-circle btn-ghost min-h-11 min-w-11"
@@ -99,6 +104,19 @@ export const PlayerBar = memo(function PlayerBar({
         />
         <span className="shrink-0">{formatClock(max)}</span>
       </div>
+      <select
+        aria-label="Playback speed"
+        title="Playback speed"
+        value={playbackRate}
+        onChange={(e) => onPlaybackRateChange(Number(e.target.value))}
+        className="select select-sm min-h-11 w-20 shrink-0 px-2"
+      >
+        {PLAYBACK_RATES.map((rate) => (
+          <option key={rate} value={rate}>
+            {rate}×
+          </option>
+        ))}
+      </select>
       {ankiConnected && (
         <button
           className="btn btn-ghost btn-circle min-h-11 min-w-11"
