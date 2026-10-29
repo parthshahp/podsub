@@ -5,6 +5,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { router } from "./router";
 
 import "./styles.css";
+import "./registerServiceWorker";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
