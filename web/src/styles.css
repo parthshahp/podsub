@@ -17,6 +17,14 @@ html {
    own focus ring. Individual components may add Tailwind focus-visible
    rings on top of this. */
 @layer base {
+  /* Hide scrollbar chrome without changing overflow or native scrolling. */
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
