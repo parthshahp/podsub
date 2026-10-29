@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { episodeAudioUrl } from "../lib/audioClip";
+import { isPlaybackRate, loadPlaybackRate, savePlaybackRate } from "../lib/playbackSettings";
 import type { Episode } from "../types";
 
 /**
@@ -21,6 +22,30 @@ export function usePlayer() {
   const currentUrlRef = useRef<string | null>(null);
   const [current, setCurrent] = useState<Episode | null>(null);
   const [duration, setDuration] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(loadPlaybackRate);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const selectedRef = useRef<Episode | null>(null);
+  const playRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.defaultPlaybackRate = playbackRate;
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
+
+  const changePlaybackRate = useCallback((rate: number) => {
+    if (!isPlaybackRate(rate)) return;
+    setPlaybackRate(rate);
+    savePlaybackRate(rate);
+  }, []);
+
+  useEffect(
+    () => () => {
+      playRequestRef.current++;
+    },
+    [],
+  );
   // Resume offset for a freshly loaded source. <audio> ignores currentTime
   // before metadata arrives, so this is applied in onLoadedMetadata.
   const pendingStartRef = useRef<number | null>(null);
@@ -48,32 +73,75 @@ export function usePlayer() {
   const currentRef = useRef(current);
   currentRef.current = current;
 
+  const playEpisode = useCallback(
+    (e: Episode, retry = false) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      const request = ++playRequestRef.current;
+      selectedRef.current = e;
+      setPlaybackError(null);
+      // Include the episode id: two episodes can share an enclosure URL.
+      const source = `${e.id}:${e.audioUrl}`;
+      if (currentUrlRef.current !== source || retry) {
+        const sameSource = currentUrlRef.current === source;
+        const startAt = sameSource ? getTime() : e.archived ? 0 : Math.max(0, e.positionSec ?? 0);
+        pendingStartRef.current = startAt > 0 ? startAt : null;
+        audio.src = episodeAudioUrl(e.id);
+        currentUrlRef.current = source;
+        setTime(startAt);
+        if (!sameSource) setDuration(e.durationSec ?? 0);
+        if (retry) audio.load();
+      }
+      currentRef.current = e;
+      setCurrent(e);
+      void audio.play().catch((err: unknown) => {
+        // Source switches and pauses can reject an older play() promise.
+        if (request !== playRequestRef.current) return;
+        currentRef.current = null;
+        setCurrent(null);
+        const blocked = err instanceof DOMException && err.name === "NotAllowedError";
+        setPlaybackError(
+          blocked
+            ? "Playback was blocked by your browser. Select Retry audio to start listening."
+            : "Audio could not be played. Check your connection and retry.",
+        );
+      });
+    },
+    [getTime, setTime],
+  );
+
   const togglePlay = useCallback(
     (e: Episode) => {
       const audio = audioRef.current;
       if (!audio) return;
       if (currentRef.current?.id === e.id) {
+        playRequestRef.current++;
         audio.pause();
+        currentRef.current = null;
         setCurrent(null);
         return;
       }
-      // One same-origin URL serves both playback and export clips.
-      if (currentUrlRef.current !== e.audioUrl) {
-        const url = episodeAudioUrl(e.id);
-        // Compare raw strings: audio.src is the absolute resolved URL.
-        audio.src = url;
-        currentUrlRef.current = e.audioUrl;
-        // Archived rows never carry a position (the server pins them to 0).
-        const startAt = e.archived ? 0 : Math.max(0, e.positionSec ?? 0);
-        pendingStartRef.current = startAt > 0 ? startAt : null;
-        setTime(startAt);
-        setDuration(e.durationSec ?? 0);
-      }
-      setCurrent(e);
-      audio.play().catch(() => setCurrent(null));
+      playEpisode(e, audio.error != null);
     },
-    [setTime],
+    [playEpisode],
   );
+
+  const retryPlayback = useCallback(() => {
+    if (selectedRef.current) playEpisode(selectedRef.current, true);
+  }, [playEpisode]);
+
+  const handleError = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio?.error || !selectedRef.current) return;
+    playRequestRef.current++;
+    currentRef.current = null;
+    setCurrent(null);
+    setPlaybackError(
+      audio.error.code === 4
+        ? "This audio is unavailable or its format is unsupported. Try loading it again."
+        : "Audio could not be loaded. Check your connection and retry.",
+    );
+  }, []);
 
   // Stable identity so memoized transcript rows don't re-render each tick.
   const seek = useCallback(
@@ -111,6 +179,8 @@ export function usePlayer() {
   }, []);
 
   const handleEnded = useCallback(() => {
+    playRequestRef.current++;
+    currentRef.current = null;
     setCurrent(null);
     setTime(0);
   }, [setTime]);
@@ -125,9 +195,10 @@ export function usePlayer() {
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
+        onError={handleError}
       />
     ),
-    [handleTimeUpdate, handleLoadedMetadata, handleEnded],
+    [handleTimeUpdate, handleLoadedMetadata, handleEnded, handleError],
   );
 
   return {
@@ -135,6 +206,10 @@ export function usePlayer() {
     audioRef,
     current,
     duration,
+    playbackRate,
+    changePlaybackRate,
+    playbackError,
+    retryPlayback,
     togglePlay,
     seek,
     subscribeToTime,
