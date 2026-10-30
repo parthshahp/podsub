@@ -161,7 +161,7 @@ export default function MobileEpisodeRow({
               id={`episode-actions-${e.id}`}
               role="dialog"
               aria-label="Episode actions"
-              className="absolute right-0 top-full z-40 mt-1 w-60 max-w-[calc(100vw-3rem)] rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg"
+              className="absolute right-0 bottom-12 z-40 mb-2 w-60 max-w-[calc(100vw-3rem)] rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg"
             >
               {e.hasTranscript ? (
                 <Link
