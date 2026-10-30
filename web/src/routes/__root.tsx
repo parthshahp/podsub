@@ -1,5 +1,6 @@
-import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { Outlet, createRootRoute, useRouterState } from "@tanstack/react-router";
 import NavBar from "../components/NavBar";
+import BottomNav from "../components/BottomNav";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -15,6 +16,9 @@ function NotFound() {
 }
 
 function RootLayout() {
+  const isPlayer = useRouterState({
+    select: (state) => state.location.pathname.startsWith("/player/"),
+  });
   return (
     <>
       <a
@@ -23,8 +27,11 @@ function RootLayout() {
       >
         Skip to main content
       </a>
-      <NavBar />
-      <Outlet />
+      <NavBar showMobileLinks={isPlayer} />
+      <div className={isPlayer ? undefined : "pb-16 md:pb-0"}>
+        <Outlet />
+      </div>
+      {!isPlayer && <BottomNav />}
     </>
   );
 }
