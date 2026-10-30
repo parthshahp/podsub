@@ -1,7 +1,16 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { loadDictionary, resolveSegment, type WordMatch } from "../lib/dictionary";
 import { PlusIcon } from "./icons";
+import "./DefinitionPopover.css";
+
+const TOUCH_QUERY = "(hover: none) and (pointer: coarse)";
+function subscribeToTouch(onChange: () => void) {
+  const query = window.matchMedia(TOUCH_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const touchSnapshot = () => typeof window !== "undefined" && window.matchMedia(TOUCH_QUERY).matches;
 
 export type HoveredWord = {
   word: string;
@@ -61,8 +70,26 @@ export const DefinitionPopover = memo(function DefinitionPopover({
   // undefined = loading, null = no match
   const [match, setMatch] = useState<WordMatch | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const touch = useSyncExternalStore(subscribeToTouch, touchSnapshot, () => false);
+  const sheet = dialog && touch;
+  const Container = sheet ? "dialog" : "div";
+  const dismiss = useCallback(() => {
+    // Release native inertness before the parent restores focus to the word.
+    if (rootRef.current instanceof HTMLDialogElement) rootRef.current.close();
+    onClose();
+  }, [onClose]);
+
+  // Native modal behavior supplies focus containment, background inertness
+  // and a top-layer backdrop without trapping desktop hover previews.
+  useEffect(() => {
+    if (!sheet) return;
+    const element = rootRef.current as HTMLDialogElement;
+    element.showModal();
+    closeRef.current?.focus({ preventScroll: true });
+    return () => element.close();
+  }, [sheet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,12 +118,12 @@ export const DefinitionPopover = memo(function DefinitionPopover({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        dismiss();
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [dismiss]);
 
   // Outside tap/click dismisses the activated dialog (touch path).
   useEffect(() => {
@@ -105,11 +132,11 @@ export const DefinitionPopover = memo(function DefinitionPopover({
       const target = e.target as Node | null;
       if (target && rootRef.current?.contains(target)) return;
       if (target && invoker && invoker.contains(target)) return;
-      onClose();
+      dismiss();
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [dialog, invoker, onClose]);
+  }, [dialog, invoker, dismiss]);
 
   const pinyin = match?.entries.length
     ? [...new Set(match.entries.map((e) => e.pinyin))].join(" / ")
@@ -135,21 +162,53 @@ export const DefinitionPopover = memo(function DefinitionPopover({
   };
 
   return (
-    <div
-      ref={rootRef}
+    <Container
+      ref={(element: HTMLDivElement | HTMLDialogElement | null) => {
+        rootRef.current = element;
+      }}
       id="dictionary-dialog"
       role="dialog"
-      aria-modal="false"
+      aria-modal={sheet ? "true" : "false"}
       aria-label={`Definition of ${match && match !== undefined ? match.word : hover.word}`}
-      className="fixed z-30 max-w-[calc(100vw-2rem)] rounded-lg border border-base-300 bg-base-100 p-3 text-sm shadow-lg"
-      style={style}
+      className={
+        sheet
+          ? "dictionary-sheet border border-base-300 bg-base-100 text-base text-base-content shadow-xl"
+          : "fixed z-30 max-w-[calc(100vw-2rem)] rounded-lg border border-base-300 bg-base-100 p-3 text-sm shadow-lg"
+      }
+      style={sheet ? undefined : style}
+      onCancel={
+        sheet
+          ? (event) => {
+              event.preventDefault();
+              dismiss();
+            }
+          : undefined
+      }
+      onClick={
+        sheet
+          ? (event) => {
+              if (event.target !== event.currentTarget) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              if (
+                event.clientY < rect.top ||
+                event.clientY > rect.bottom ||
+                event.clientX < rect.left ||
+                event.clientX > rect.right
+              )
+                dismiss();
+            }
+          : undefined
+      }
       onMouseEnter={onKeep}
       onMouseLeave={onLeave}
     >
+      {sheet && (
+        <div aria-hidden="true" className="mx-auto mb-5 h-1 w-10 rounded-full bg-base-300" />
+      )}
       <button
         ref={closeRef}
         type="button"
-        onClick={onClose}
+        onClick={dismiss}
         aria-label="Close definition"
         className="btn btn-ghost btn-xs btn-circle absolute top-1 right-1 min-h-11 min-w-11 md:min-h-8 md:min-w-8"
       >
@@ -170,20 +229,34 @@ export const DefinitionPopover = memo(function DefinitionPopover({
       ) : (
         <>
           <div className="flex items-baseline justify-between gap-2 pr-8">
-            <span className="text-base font-medium">{match.word}</span>
+            <span className={sheet ? "text-2xl font-semibold" : "text-base font-medium"}>
+              {match.word}
+            </span>
             {match.entries.length === 1 ? (
               <span className="truncate text-xs text-primary/80">{match.entries[0]?.pinyin}</span>
             ) : (
               <span className="text-xs text-base-content/40">{match.entries.length} entries</span>
             )}
           </div>
-          <div className="mt-1.5 max-h-52 space-y-1.5 overflow-y-auto">
+          <div
+            className={
+              sheet
+                ? "mt-4 max-h-[45dvh] space-y-3 overflow-y-auto overscroll-contain"
+                : "mt-1.5 max-h-52 space-y-1.5 overflow-y-auto"
+            }
+          >
             {match.entries.map((entry, i) => (
               <div key={i}>
                 {match.entries.length > 1 && (
                   <p className="text-xs text-primary/80">{entry.pinyin}</p>
                 )}
-                <ul className="list-inside list-disc space-y-0.5 text-[13px] leading-snug text-base-content/80 marker:text-base-content/30">
+                <ul
+                  className={
+                    sheet
+                      ? "list-inside list-disc space-y-2 leading-relaxed text-base-content/80 marker:text-base-content/30"
+                      : "list-inside list-disc space-y-0.5 text-[13px] leading-snug text-base-content/80 marker:text-base-content/30"
+                  }
+                >
                   {entry.definitions.map((def, j) => (
                     <li key={j}>{def}</li>
                   ))}
@@ -212,7 +285,7 @@ export const DefinitionPopover = memo(function DefinitionPopover({
           </div>
         </>
       )}
-    </div>
+    </Container>
   );
 });
 
