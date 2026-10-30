@@ -13,6 +13,23 @@ html {
   background-color: var(--color-base-200);
 }
 
+/* viewport-fit=cover exposes the full screen. Keep every route clear of
+   notches (including landscape) and the home indicator, once per edge. */
+body {
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.player-viewport {
+  height: calc(100dvh - 4rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
+@media (display-mode: standalone) {
+  html {
+    overscroll-behavior-y: none;
+  }
+}
+
 /* Visible keyboard focus fallback for any interactive element without its
    own focus ring. Individual components may add Tailwind focus-visible
    rings on top of this. */

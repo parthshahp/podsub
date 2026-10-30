@@ -128,7 +128,7 @@ function EpisodePage() {
   // highlighted line changes) and owns hover/dialog state. Playback and
   // hover therefore never re-render this page, the sidebar, or each other.
   return (
-    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden">
+    <div className="player-viewport flex min-h-0 flex-col overflow-hidden">
       {audioElement}
       <PageShell className="flex min-h-0 flex-1 flex-col md:flex-row">
         <EpisodeSidebar podcast={podcast} episode={episode} slug={slug} />
