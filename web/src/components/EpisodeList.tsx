@@ -6,6 +6,7 @@ import { formatClock, formatDate, formatDuration } from "../lib/format";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
 import type { EpisodeListItem } from "../types";
+import MobileEpisodeRow from "./MobileEpisodeRow";
 
 /** A toggle-pill filter rendered under the search bar. Pages pass whichever
  * filters they support — the all-episodes page passes in-progress,
@@ -170,8 +171,18 @@ export default function EpisodeList({
         {episodes.map((e) => (
           <li
             key={e.id}
-            className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6 ${e.archived ? "opacity-50" : ""}`}
+            className={`episode-row flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6 ${e.archived ? "opacity-50" : ""}`}
           >
+            <MobileEpisodeRow
+              episode={e}
+              showPodcast={showPodcast}
+              onPlay={() => onPlay(e)}
+              onArchive={() => onToggleArchive(e)}
+              onTranscript={() => onDownloadTranscript(e)}
+              archiving={archivePendingId === e.id}
+              startingTranscript={transcriptPendingId === e.id}
+              transcriptStarted={transcriptStartedIds.has(e.id)}
+            />
             {showPodcast ? (
               <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto sm:flex-1 sm:gap-4">
                 <Link
