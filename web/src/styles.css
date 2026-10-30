@@ -24,6 +24,24 @@ body {
   height: calc(100dvh - 4rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
+/* Coarse pointers need larger hit areas, including on wide touch devices.
+   Keep input text at least 16px so Safari can focus without zooming the page.
+   Zoom remains available and content text remains selectable. */
+@media (pointer: coarse) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: max(1rem, 16px);
+  }
+
+  .btn,
+  .episode-filter {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+}
+
 @media (display-mode: standalone) {
   html {
     overscroll-behavior-y: none;
