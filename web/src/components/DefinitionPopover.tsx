@@ -88,8 +88,13 @@ export const DefinitionPopover = memo(function DefinitionPopover({
     const element = rootRef.current as HTMLDialogElement;
     element.showModal();
     closeRef.current?.focus({ preventScroll: true });
-    return () => element.close();
-  }, [sheet]);
+    return () => {
+      element.close();
+      // Anki success closes via the parent rather than the dismiss button.
+      // Restore focus after modal inertness is gone for that path too.
+      if (invoker?.isConnected) invoker.focus({ preventScroll: true });
+    };
+  }, [sheet, invoker]);
 
   useEffect(() => {
     let cancelled = false;
