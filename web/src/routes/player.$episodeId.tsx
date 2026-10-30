@@ -13,6 +13,7 @@ import { usePlaybackProgress } from "../hooks/usePlaybackProgress";
 import { usePlayer } from "../hooks/usePlayer";
 import { useScreenWakeLock } from "../hooks/useScreenWakeLock";
 import { kebabCase } from "../lib/kebab";
+import { podcastImageUrl } from "../lib/podcastImage";
 
 export const Route = createFileRoute("/player/$episodeId")({
   loader: async ({ params: { episodeId } }) => {
@@ -43,6 +44,33 @@ function EpisodePage() {
   const { audioElement, audioRef, current, duration, togglePlay, seek, subscribeToTime, getTime } =
     usePlayer();
   const playing = current?.id === episode.id;
+
+  // Supply lock-screen / system media controls with the active episode.
+  // Keep metadata while paused; clear it when this player leaves the page.
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
+
+    const metadata = new MediaMetadata({
+      title: episode.title,
+      artist: podcast.title,
+      album: podcast.title,
+      artwork: podcast.imageUrl
+        ? [
+            {
+              src: new URL(podcastImageUrl(podcast.id, 512), window.location.href).href,
+              type: "image/jpeg",
+            },
+          ]
+        : [],
+    });
+    navigator.mediaSession.metadata = metadata;
+
+    return () => {
+      if (navigator.mediaSession.metadata === metadata) {
+        navigator.mediaSession.metadata = null;
+      }
+    };
+  }, [episode.id, episode.title, podcast.id, podcast.title, podcast.imageUrl]);
 
   // Keep the screen awake while audio is playing so the transcript stays
   // readable without taps; released automatically on pause/unmount.
