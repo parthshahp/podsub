@@ -10,6 +10,7 @@ import type { Episode } from "../../types";
 import type { WordHoverInfo } from "../WordSpans";
 import { DefinitionPopover } from "../DefinitionPopover";
 import { TranscriptPane } from "./TranscriptPane";
+import { PlaybackStatus } from "./PlaybackStatus";
 
 type TranscriptSectionProps = {
   episode: Episode;
@@ -57,9 +58,8 @@ export const TranscriptSection = memo(function TranscriptSection({
 }: TranscriptSectionProps) {
   // Snapshot is the line index (a stable number) — Object.is bails out on
   // the vast majority of time notifications.
-  const activeIdx = useSyncExternalStore(
-    subscribeToTime,
-    () => findActiveLineIndex(lines, getTime()),
+  const activeIdx = useSyncExternalStore(subscribeToTime, () =>
+    findActiveLineIndex(lines, getTime()),
   );
 
   const { containerRef, follow, setFollow, handleUserScroll, handleScrollDivert } =
@@ -124,9 +124,7 @@ export const TranscriptSection = memo(function TranscriptSection({
       const to = wordButtonFrom(e.target);
       if (!to) return;
       const from =
-        e.relatedTarget instanceof HTMLElement
-          ? e.relatedTarget.closest("[data-word-btn]")
-          : null;
+        e.relatedTarget instanceof HTMLElement ? e.relatedTarget.closest("[data-word-btn]") : null;
       if (from === to) return;
       handleWordEnter(wordInfoFrom(to));
     },
@@ -138,9 +136,7 @@ export const TranscriptSection = memo(function TranscriptSection({
       const from = wordButtonFrom(e.target);
       if (!from) return;
       const to =
-        e.relatedTarget instanceof HTMLElement
-          ? e.relatedTarget.closest("[data-word-btn]")
-          : null;
+        e.relatedTarget instanceof HTMLElement ? e.relatedTarget.closest("[data-word-btn]") : null;
       if (to === from) return;
       handleWordLeave();
     },
@@ -234,16 +230,7 @@ export const TranscriptSection = memo(function TranscriptSection({
           ankiSending={sendingWord === activeWord.word}
         />
       )}
-      {ankiStatus && (
-        <div
-          role="status"
-          className={`alert absolute right-4 bottom-16 z-10 w-auto max-w-md py-2 text-sm shadow-lg sm:right-6 sm:bottom-6 ${
-            ankiStatus.kind === "success" ? "alert-success" : "alert-error"
-          }`}
-        >
-          {ankiStatus.message}
-        </div>
-      )}
+      <PlaybackStatus status={ankiStatus} />
     </div>
   );
 });

@@ -6,6 +6,7 @@ import { kebabCase } from "../lib/kebab";
 import { podcastImageUrl } from "../lib/podcastImage";
 import { ArchiveIcon, PlayIcon, TranscriptIcon, UnarchiveIcon } from "./icons";
 import "./MobileEpisodeRow.css";
+import { useSurfacePresence } from "../hooks/useSurfacePresence";
 
 type Props = {
   episode: EpisodeListItem;
@@ -33,6 +34,7 @@ export default function MobileEpisodeRow({
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const present = useSurfacePresence(open, panelRef, triggerRef);
   const resume = !e.archived && (e.positionSec ?? 0) >= 5;
   const busy =
     startingTranscript ||
@@ -51,14 +53,14 @@ export default function MobileEpisodeRow({
     if (restoreFocus) triggerRef.current?.focus();
   };
   useEffect(() => {
-    if (!open) return;
+    if (!open || !present) return;
     panelRef.current?.querySelector<HTMLElement>("a, button:not(:disabled)")?.focus();
     const outside = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
-  }, [open]);
+  }, [open, present]);
 
   return (
     <div className="mobile-episode-row relative w-full space-y-3 sm:hidden">
@@ -166,13 +168,16 @@ export default function MobileEpisodeRow({
               <circle cx="19" cy="12" r="1.5" />
             </svg>
           </button>
-          {open && (
+          {present && (
             <div
               ref={panelRef}
               id={`episode-actions-${e.id}`}
               role="dialog"
               aria-label="Episode actions"
-              className="absolute right-0 bottom-12 z-40 mb-2 w-60 max-w-[calc(100vw-3rem)] rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg"
+              aria-hidden={!open}
+              inert={!open}
+              data-motion-kind="actions"
+              className="motion-surface absolute right-0 bottom-12 z-40 mb-2 w-60 max-w-[calc(100vw-3rem)] rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg"
             >
               {e.hasTranscript ? (
                 <Link
