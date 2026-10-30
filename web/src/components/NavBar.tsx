@@ -39,7 +39,7 @@ function SyncButton() {
   );
 }
 
-export default function NavBar() {
+export default function NavBar({ showMobileLinks = true }: { showMobileLinks?: boolean }) {
   return (
     <header className="navbar border-b border-base-300 bg-base-100 px-6">
       <Link to="/" className="link link-hover text-lg font-semibold">
@@ -47,22 +47,24 @@ export default function NavBar() {
       </Link>
       <nav className="ml-auto flex items-center gap-2">
         <SyncButton />
-        <Link
-          to="/episodes"
-          className="btn btn-ghost btn-circle btn-sm"
-          aria-label="All episodes"
-          title="All episodes"
-        >
-          <ListIcon className="h-5 w-5" />
-        </Link>
-        <Link
-          to="/settings"
-          className="btn btn-ghost btn-circle btn-sm"
-          aria-label="Settings"
-          title="Settings"
-        >
-          <GearIcon className="h-5 w-5" />
-        </Link>
+        <span className={showMobileLinks ? "contents" : "hidden md:contents"}>
+          <Link
+            to="/episodes"
+            className="btn btn-ghost btn-circle btn-sm"
+            aria-label="All episodes"
+            title="All episodes"
+          >
+            <ListIcon className="h-5 w-5" />
+          </Link>
+          <Link
+            to="/settings"
+            className="btn btn-ghost btn-circle btn-sm"
+            aria-label="Settings"
+            title="Settings"
+          >
+            <GearIcon className="h-5 w-5" />
+          </Link>
+        </span>
       </nav>
     </header>
   );
