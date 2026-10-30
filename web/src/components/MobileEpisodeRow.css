@@ -1,0 +1,7 @@
+/* Keep the desktop row's existing layout and actions. On small screens,
+   only the dedicated mobile row participates in layout or accessibility. */
+@media (width < 40rem) {
+  .episode-row > :not(.mobile-episode-row) {
+    display: none;
+  }
+}
