@@ -58,7 +58,7 @@ export const PlayerBar = memo(function PlayerBar({
   return (
     <footer
       aria-label="Playback controls"
-      className="sticky bottom-0 z-30 flex shrink-0 flex-col gap-1 border-t border-base-300 bg-base-100 px-4 pt-1 pb-3 sm:flex-row sm:gap-3 sm:px-6 sm:py-3"
+      className="sticky bottom-0 z-30 flex shrink-0 flex-col gap-0 border-t border-base-300 bg-base-100 px-4 pt-0 pb-1 sm:flex-row sm:gap-3 sm:px-6 sm:py-3"
     >
       <div className="flex min-h-11 w-full min-w-0 items-center gap-3 text-xs text-base-content/60 tabular-nums sm:order-4 sm:flex-1">
         <span className="shrink-0">{formatClock(currentSecond)}</span>
@@ -103,7 +103,7 @@ export const PlayerBar = memo(function PlayerBar({
       </div>
       {ankiConnected && (
         <button
-          className="btn btn-ghost btn-circle absolute right-3 bottom-4 min-h-11 min-w-11 sm:static sm:order-5"
+          className="btn btn-ghost btn-circle absolute right-3 bottom-2.5 min-h-11 min-w-11 sm:static sm:order-5"
           disabled={syncing}
           onClick={onSync}
           aria-label="Sync Anki"

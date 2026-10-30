@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { GearIcon, ListIcon } from "./icons";
 
-/** Browsing tabs stay near the thumb. The player keeps its own footer. */
+/** Compact 48px tabs keep 44px touch targets; the safe area is added below. */
 export default function BottomNav() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const library = pathname !== "/episodes" && pathname !== "/settings";
@@ -31,7 +31,7 @@ export default function BottomNav() {
           to={to}
           activeOptions={{ exact: true }}
           aria-current={active ? "page" : undefined}
-          className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium ${active ? "text-primary" : "text-base-content/60"}`}
+          className={`flex min-h-12 flex-col items-center justify-center gap-0.5 text-xs font-medium ${active ? "text-primary" : "text-base-content/60"}`}
         >
           {icon}
           <span>{label}</span>

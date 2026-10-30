@@ -28,7 +28,7 @@ function RootLayout() {
         Skip to main content
       </a>
       <NavBar showMobileLinks={isPlayer} />
-      <div className={isPlayer ? undefined : "pb-16 md:pb-0"}>
+      <div className={isPlayer ? undefined : "pb-12 md:pb-0"}>
         <Outlet />
       </div>
       {!isPlayer && <BottomNav />}
