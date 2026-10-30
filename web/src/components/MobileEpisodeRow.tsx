@@ -39,15 +39,13 @@ export default function MobileEpisodeRow({
     transcriptStarted ||
     e.transcribeStatus === "queued" ||
     e.transcribeStatus === "running";
-  const status = e.hasTranscript
-    ? "Transcript ready"
-    : startingTranscript
-      ? "Starting transcript…"
-      : busy
-        ? "Transcribing…"
-        : e.transcribeStatus === "failed"
-          ? "Transcript failed"
-          : "No transcript";
+  const status = startingTranscript
+    ? "Starting transcript…"
+    : busy
+      ? "Transcribing…"
+      : e.transcribeStatus === "failed"
+        ? "Transcript failed"
+        : null;
   const close = (restoreFocus = true) => {
     setOpen(false);
     if (restoreFocus) triggerRef.current?.focus();
@@ -125,7 +123,20 @@ export default function MobileEpisodeRow({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 text-xs text-base-content/60">{status}</span>
+        <span className="min-w-0 flex-1 text-xs text-base-content/60">
+          {e.hasTranscript ? (
+            <span
+              role="img"
+              aria-label="Transcript available"
+              title="Transcript available"
+              className="inline-flex items-center text-success"
+            >
+              <TranscriptIcon className="h-5 w-5" />
+            </span>
+          ) : (
+            status
+          )}
+        </span>
         <div
           ref={rootRef}
           className="contents"
