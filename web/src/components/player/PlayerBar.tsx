@@ -25,7 +25,7 @@ type PlayerBarProps = {
  * is positioned, so without a z-index it would paint over this bar).
  * Single row on all screens so play + slider + times stay usable one-handed
  * without stealing transcript height; the slider shrinks while the times
- * stay legible. Bottom padding respects the iOS home indicator safe area.
+ * stay legible. The document's safe-area padding protects the home indicator.
  *
  * Memoized + self-subscribed: the page passes stable props and never
  * re-renders during playback; only this bar ticks.
@@ -58,7 +58,7 @@ export const PlayerBar = memo(function PlayerBar({
   return (
     <footer
       aria-label="Playback controls"
-      className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-1 border-t border-base-300 bg-base-100 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-x-3 sm:px-6 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      className="sticky bottom-0 z-30 flex shrink-0 items-center gap-x-1 border-t border-base-300 bg-base-100 px-3 py-2 sm:gap-x-3 sm:px-6 sm:py-3"
     >
       <button
         className="btn btn-circle btn-ghost min-h-11 min-w-11"

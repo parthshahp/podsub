@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { episodeAudioUrl } from "../lib/audioClip";
+import { bindMediaSession } from "../lib/mediaSession";
 import type { Episode } from "../types";
 
 /**
@@ -18,7 +19,9 @@ import type { Episode } from "../types";
  */
 export function usePlayer() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const currentUrlRef = useRef<string | null>(null);
+  // Keep the loaded episode while paused so a headset / lock-screen Play
+  // event can restore the UI without reloading the source or resume offset.
+  const loadedEpisodeRef = useRef<Episode | null>(null);
   const [current, setCurrent] = useState<Episode | null>(null);
   const [duration, setDuration] = useState(0);
   // Resume offset for a freshly loaded source. <audio> ignores currentTime
@@ -43,34 +46,27 @@ export function usePlayer() {
     for (const cb of listenersRef.current) cb();
   }, []);
 
-  // `current` in a ref so togglePlay keeps a stable identity — otherwise
-  // every play/pause would invalidate every memoized row downstream.
-  const currentRef = useRef(current);
-  currentRef.current = current;
-
   const togglePlay = useCallback(
     (e: Episode) => {
       const audio = audioRef.current;
       if (!audio) return;
-      if (currentRef.current?.id === e.id) {
+      if (loadedEpisodeRef.current?.id === e.id && !audio.paused) {
         audio.pause();
-        setCurrent(null);
         return;
       }
       // One same-origin URL serves both playback and export clips.
-      if (currentUrlRef.current !== e.audioUrl) {
+      if (loadedEpisodeRef.current?.id !== e.id || loadedEpisodeRef.current.audioUrl !== e.audioUrl) {
         const url = episodeAudioUrl(e.id);
         // Compare raw strings: audio.src is the absolute resolved URL.
         audio.src = url;
-        currentUrlRef.current = e.audioUrl;
         // Archived rows never carry a position (the server pins them to 0).
         const startAt = e.archived ? 0 : Math.max(0, e.positionSec ?? 0);
         pendingStartRef.current = startAt > 0 ? startAt : null;
         setTime(startAt);
         setDuration(e.durationSec ?? 0);
       }
-      setCurrent(e);
-      audio.play().catch(() => setCurrent(null));
+      loadedEpisodeRef.current = e;
+      void audio.play().catch(() => {});
     },
     [setTime],
   );
@@ -80,11 +76,24 @@ export function usePlayer() {
     (t: number) => {
       const audio = audioRef.current;
       if (!audio || !Number.isFinite(t)) return;
-      audio.currentTime = t;
-      setTime(t);
+      const position = Math.max(0, Number.isFinite(audio.duration) ? Math.min(t, audio.duration) : t);
+      audio.currentTime = position;
+      setTime(position);
     },
     [setTime],
   );
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    return bindMediaSession(audio, seek);
+  }, [seek]);
+
+  // System controls and interruptions also emit these events. Deriving
+  // state from them keeps the play button, progress saving and wake lock
+  // in sync with what the audio is actually doing.
+  const handlePlay = useCallback(() => setCurrent(loadedEpisodeRef.current), []);
+  const handlePause = useCallback(() => setCurrent(null), []);
 
   const handleTimeUpdate = useCallback(
     (e: React.SyntheticEvent<HTMLAudioElement>) => {
@@ -122,12 +131,14 @@ export function usePlayer() {
       <audio
         ref={audioRef}
         preload="none"
+        onPlay={handlePlay}
+        onPause={handlePause}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
       />
     ),
-    [handleTimeUpdate, handleLoadedMetadata, handleEnded],
+    [handlePlay, handlePause, handleTimeUpdate, handleLoadedMetadata, handleEnded],
   );
 
   return {
