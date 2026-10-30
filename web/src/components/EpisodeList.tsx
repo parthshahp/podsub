@@ -123,7 +123,7 @@ export default function EpisodeList({
             aria-busy={searching}
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            className="w-full bg-transparent pl-8 text-[15px] outline-none placeholder:text-base-content/40"
+            className="w-full bg-transparent pl-8 text-base outline-none placeholder:text-base-content/40 sm:text-[15px]"
           />
           {searching && (
             <span
@@ -153,7 +153,7 @@ export default function EpisodeList({
               type="button"
               aria-pressed={f.active}
               onClick={() => f.onToggle(!f.active)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+              className={`episode-filter inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
                 f.active
                   ? "border-primary/50 bg-primary/10 text-primary"
                   : "border-base-300 text-base-content/60 hover:border-base-content/30 hover:text-base-content"
