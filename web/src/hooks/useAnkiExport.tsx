@@ -7,8 +7,13 @@ import { loadAnkiSettings } from "../lib/ankiSettings";
 import { blobToBase64, loadAudioClip } from "../lib/audioClip";
 import { lineEndSec, loadPodcastImage, type TranscriptLineData } from "../lib/transcriptView";
 import type { Episode, Podcast, Word } from "../types";
+import { wasPointerInput } from "../lib/motionInput";
 
-export type ExportStatus = { kind: "success" | "error"; message: ReactNode };
+export type ExportStatus = {
+  kind: "success" | "error";
+  message: ReactNode;
+  pointerTriggered: boolean;
+};
 
 /** Hovered word plus the dictionary data for its word card. */
 export type WordSelection = {
@@ -59,35 +64,43 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
     };
   }, []);
 
-  const showStatus = useCallback((kind: "success" | "error", message: ReactNode) => {
-    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
-    setStatus({ kind, message });
-    statusTimerRef.current = setTimeout(() => setStatus(null), 5000);
-  }, []);
+  const showStatus = useCallback(
+    (kind: "success" | "error", message: ReactNode, pointerTriggered: boolean) => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      setStatus({ kind, message, pointerTriggered });
+      statusTimerRef.current = setTimeout(() => setStatus(null), 5000);
+    },
+    [],
+  );
 
-  const showUnconfigured = useCallback(() => {
-    showStatus(
-      "error",
-      <>
-        Anki export isn’t configured.{" "}
-        <Link to="/settings" className="link">
-          Open settings
-        </Link>
-        .
-      </>,
-    );
-  }, [showStatus]);
+  const showUnconfigured = useCallback(
+    (pointerTriggered: boolean) => {
+      showStatus(
+        "error",
+        <>
+          Anki export isn’t configured.{" "}
+          <Link to="/settings" className="link">
+            Open settings
+          </Link>
+          .
+        </>,
+        pointerTriggered,
+      );
+    },
+    [showStatus],
+  );
 
   /** Sync the Anki collection with AnkiWeb via AnkiConnect. */
   const syncAnki = useCallback(async () => {
+    const pointerTriggered = wasPointerInput();
     const settings = loadAnkiSettings();
     if (!isConfigured(settings)) return;
     setSyncing(true);
     try {
       await syncAnkiWeb();
-      showStatus("success", "Anki collection synced");
+      showStatus("success", "Anki collection synced", pointerTriggered);
     } catch (err) {
-      showStatus("error", err instanceof Error ? err.message : String(err));
+      showStatus("error", err instanceof Error ? err.message : String(err), pointerTriggered);
     } finally {
       setSyncing(false);
     }
@@ -96,9 +109,12 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
   /** Send the hovered word's card to Anki; resolves true when added. */
   const exportWord = useCallback(
     async (sel: WordSelection): Promise<boolean> => {
+      // Preserve the initiating input even if another interaction happens
+      // while the network request is in flight.
+      const pointerTriggered = wasPointerInput();
       const settings = loadAnkiSettings();
       if (!isConfigured(settings)) {
-        showUnconfigured();
+        showUnconfigured(pointerTriggered);
         return false;
       }
       const i = sel.lineIndex;
@@ -157,13 +173,14 @@ export function useAnkiExport({ podcast, episode, slug, lines, words }: UseAnkiE
           showStatus(
             "error",
             `Card not added — it may already exist in your collection, or its first field is empty.${mediaInfo}`,
+            pointerTriggered,
           );
           return false;
         }
-        showStatus("success", `“${sel.word}” sent to Anki${mediaInfo}`);
+        showStatus("success", `“${sel.word}” sent to Anki${mediaInfo}`, pointerTriggered);
         return true;
       } catch (err) {
-        showStatus("error", err instanceof Error ? err.message : String(err));
+        showStatus("error", err instanceof Error ? err.message : String(err), pointerTriggered);
         return false;
       } finally {
         setSendingWord(null);

@@ -37,7 +37,7 @@ export const TranscriptLine = memo(function TranscriptLine({
   return (
     <li
       aria-current={isActive ? true : undefined}
-      className={`group flex cursor-pointer items-start gap-1 rounded-md px-2 py-2 text-[18px] leading-[2] transition-colors duration-300 md:py-1.5 md:leading-relaxed [@media(hover:none)]:cursor-default ${
+      className={`group flex cursor-pointer items-start gap-1 rounded-md px-2 py-2 text-[18px] leading-[2] md:py-1.5 md:leading-relaxed [@media(hover:none)]:cursor-default ${
         isActive ? "bg-primary/30 shadow-[inset_3px_0_0_var(--color-primary)]" : "hover:bg-base-200"
       }`}
       onClick={(e) => {

@@ -10,7 +10,68 @@
    body is content-sized, so short pages would otherwise show daisyUI's
    base-100 root background below the fold. */
 html {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-surface-duration: 160ms;
+  --motion-press-duration: 100ms;
+  --motion-reduced-duration: 80ms;
   background-color: var(--color-base-200);
+}
+
+/* Only pointer-triggered, occasional surfaces move. Core navigation and
+   keyboard actions have no transition or presence delay. */
+.motion-surface {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.motion-surface[data-motion-state="closed"] {
+  opacity: 0;
+}
+
+.motion-surface[data-motion-kind="actions"][data-motion-state="closed"] {
+  transform: scale(0.97);
+}
+
+.motion-surface[data-motion-kind="status"][data-motion-state="closed"] {
+  transform: translateY(20%);
+}
+
+.episode-filter {
+  transition: none;
+}
+
+html[data-motion-input="pointer"] .motion-surface:not([data-motion-input="keyboard"]) {
+  transition:
+    opacity var(--motion-surface-duration) var(--ease-out),
+    transform var(--motion-surface-duration) var(--ease-out);
+}
+
+html[data-motion-input="pointer"] .episode-filter {
+  transition: transform var(--motion-press-duration) var(--ease-out);
+}
+
+html[data-motion-input="pointer"] .episode-filter:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-surface[data-motion-state="closed"] {
+    transform: none;
+  }
+
+  html[data-motion-input="pointer"] .motion-surface:not([data-motion-input="keyboard"]) {
+    transition: opacity var(--motion-reduced-duration) var(--ease-out);
+  }
+
+  html[data-motion-input="pointer"] .episode-filter {
+    transition: opacity var(--motion-reduced-duration) var(--ease-out);
+  }
+
+  html[data-motion-input="pointer"] .episode-filter:active {
+    transform: none;
+    opacity: 0.8;
+  }
 }
 
 /* viewport-fit=cover exposes the full screen. Keep every route clear of

@@ -1,6 +1,8 @@
 import { Outlet, createRootRoute, useRouterState } from "@tanstack/react-router";
 import NavBar from "../components/NavBar";
 import BottomNav from "../components/BottomNav";
+import { useEffect } from "react";
+import { observeMotionInput } from "../lib/motionInput";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -16,6 +18,7 @@ function NotFound() {
 }
 
 function RootLayout() {
+  useEffect(observeMotionInput, []);
   const isPlayer = useRouterState({
     select: (state) => state.location.pathname.startsWith("/player/"),
   });
