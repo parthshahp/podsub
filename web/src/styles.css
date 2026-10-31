@@ -14,15 +14,58 @@ html {
   --motion-surface-duration: 160ms;
   --motion-press-duration: 100ms;
   --motion-reduced-duration: 80ms;
+  --motion-screen-duration: 140ms;
   background-color: var(--color-base-200);
 }
 
-/* Only pointer-triggered, occasional surfaces move. Core navigation and
-   keyboard actions have no transition or presence delay. */
+/* Pointer feedback stays restrained; keyboard actions remain immediate. */
 .motion-surface {
   opacity: 1;
   transform: none;
   transition: none;
+}
+
+/* Only the selected artwork/title morph. Crossfade the viewport, not a
+   variable-height list: a deep scroll must never scale or slide the whole page.
+   Chrome remains stable; peer tabs never start a view transition. */
+#app-header {
+  view-transition-name: app-header;
+}
+
+#app-tabs {
+  view-transition-name: app-tabs;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(*) {
+  animation-duration: var(--motion-screen-duration);
+  animation-timing-function: var(--ease-out);
+}
+
+::view-transition-group(root),
+::view-transition-group(app-header),
+::view-transition-group(app-tabs),
+::view-transition-new(app-header),
+::view-transition-new(app-tabs) {
+  animation: none;
+}
+
+::view-transition-old(app-header),
+::view-transition-old(app-tabs) {
+  display: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-old(screen-artwork),
+::view-transition-new(screen-artwork),
+::view-transition-old(screen-title),
+::view-transition-new(screen-title) {
+  animation-duration: var(--motion-screen-duration);
+  animation-timing-function: var(--ease-out);
 }
 
 .motion-surface[data-motion-state="closed"] {
@@ -56,6 +99,13 @@ html[data-motion-input="pointer"] .episode-filter:active {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Also finish an in-flight transition if the preference changes mid-flight. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0s;
+  }
+
   .motion-surface[data-motion-state="closed"] {
     transform: none;
   }

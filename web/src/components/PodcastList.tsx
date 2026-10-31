@@ -56,6 +56,7 @@ export default function PodcastList({ filteredPodcasts, q }: Props) {
                 {p.imageUrl ? (
                   <img
                     src={podcastImageUrl(p.id, 256)}
+                    data-podcast-artwork={p.id}
                     srcSet={podcastImageSrcSet(p.id, 256, 512)}
                     alt={p.title}
                     loading="lazy"
@@ -65,7 +66,10 @@ export default function PodcastList({ filteredPodcasts, q }: Props) {
                     className="aspect-square w-full rounded-lg object-cover shadow-sm transition-[transform,box-shadow] duration-200 ease-out group-hover:scale-[1.02] group-hover:shadow-md"
                   />
                 ) : (
-                  <span className="flex aspect-square w-full items-center justify-center rounded-lg bg-base-300 p-3 text-center text-sm text-base-content/60 transition-[transform,box-shadow] duration-200 ease-out group-hover:scale-[1.02] group-hover:shadow-md">
+                  <span
+                    data-podcast-artwork={p.id}
+                    className="flex aspect-square w-full items-center justify-center rounded-lg bg-base-300 p-3 text-center text-sm text-base-content/60 transition-[transform,box-shadow] duration-200 ease-out group-hover:scale-[1.02] group-hover:shadow-md"
+                  >
                     {p.title}
                   </span>
                 )}

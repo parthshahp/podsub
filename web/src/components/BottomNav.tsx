@@ -22,6 +22,7 @@ export default function BottomNav() {
   ];
   return (
     <nav
+      id="app-tabs"
       aria-label="Main navigation"
       className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-base-300 bg-base-100 pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] md:hidden"
     >

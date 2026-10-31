@@ -31,6 +31,7 @@ export default function PodcastHeader({ podcast }: { podcast: Podcast }) {
       {podcast.imageUrl ? (
         <img
           src={podcastImageUrl(podcast.id, 256)}
+          data-podcast-artwork={podcast.id}
           srcSet={podcastImageSrcSet(podcast.id, 256, 512)}
           alt={podcast.title}
           width={192}
@@ -41,7 +42,10 @@ export default function PodcastHeader({ podcast }: { podcast: Podcast }) {
           className="h-28 w-28 shrink-0 rounded-lg object-cover shadow-sm sm:h-48 sm:w-48"
         />
       ) : (
-        <span className="flex h-48 w-48 shrink-0 items-center justify-center rounded-lg bg-base-300 p-4 text-center text-sm text-base-content/60">
+        <span
+          data-podcast-artwork={podcast.id}
+          className="flex h-28 w-28 shrink-0 items-center justify-center rounded-lg bg-base-300 p-4 text-center text-sm text-base-content/60 sm:h-48 sm:w-48"
+        >
           {podcast.title}
         </span>
       )}

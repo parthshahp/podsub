@@ -147,7 +147,11 @@ export default function EpisodeList({
       </div>
 
       {filters.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Episode filters">
+        <div
+          className="mt-4 flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Episode filters"
+        >
           {filters.map((f) => (
             <button
               key={f.key}
@@ -188,6 +192,7 @@ export default function EpisodeList({
                 <Link
                   to="/$slug/$id"
                   params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
+                  data-episode-artwork={e.id}
                   className="shrink-0 no-underline"
                   aria-label={e.podcast.title}
                 >
@@ -210,6 +215,7 @@ export default function EpisodeList({
                   <Link
                     to="/player/$episodeId"
                     params={{ episodeId: e.id }}
+                    data-episode-title={e.id}
                     className="block truncate text-[15px] font-medium no-underline hover:underline"
                   >
                     {e.title}
@@ -229,6 +235,7 @@ export default function EpisodeList({
                 <Link
                   to="/player/$episodeId"
                   params={{ episodeId: e.id }}
+                  data-episode-title={e.id}
                   className="block truncate text-[15px] font-medium no-underline hover:underline"
                 >
                   {e.title}

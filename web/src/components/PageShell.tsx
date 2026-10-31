@@ -1,5 +1,6 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import PageLoading from "./PageLoading";
 
 type Props = {
   className: string;
@@ -27,11 +28,8 @@ export default function PageShell({ className, children }: Props) {
  */
 export function pageLoadState(noun: string, className = "p-6") {
   return {
-    pendingComponent: () => (
-      <PageShell className={className}>
-        <p className="text-sm text-base-content/60">Loading {noun}…</p>
-      </PageShell>
-    ),
+    pendingMinMs: 0,
+    pendingComponent: () => <PageLoading noun={noun} className={className} />,
     errorComponent: ({ error }: ErrorComponentProps) => (
       <PageShell className={className}>
         <p className="text-sm text-error">
