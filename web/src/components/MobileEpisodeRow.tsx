@@ -69,6 +69,7 @@ export default function MobileEpisodeRow({
           <Link
             to="/$slug/$id"
             params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
+            data-episode-artwork={e.id}
             aria-label={e.podcast.title}
             className="shrink-0"
           >
@@ -90,6 +91,7 @@ export default function MobileEpisodeRow({
           <Link
             to="/player/$episodeId"
             params={{ episodeId: e.id }}
+            data-episode-title={e.id}
             className="line-clamp-2 text-base leading-snug font-medium"
           >
             {e.title}

@@ -19,7 +19,11 @@ type EpisodeSidebarProps = {
  * Memoized: props are static for the life of the page, so playback ticks
  * and transcript hover must never re-execute this subtree.
  */
-export const EpisodeSidebar = memo(function EpisodeSidebar({ podcast, episode, slug }: EpisodeSidebarProps) {
+export const EpisodeSidebar = memo(function EpisodeSidebar({
+  podcast,
+  episode,
+  slug,
+}: EpisodeSidebarProps) {
   const meta = [
     episode.publishedAt ? formatDate(episode.publishedAt) : "",
     episode.durationSec != null ? formatDuration(episode.durationSec) : "",
@@ -57,6 +61,8 @@ export const EpisodeSidebar = memo(function EpisodeSidebar({ podcast, episode, s
         <Link
           to="/$slug/$id"
           params={{ slug, id: podcast.id }}
+          data-podcast-artwork={podcast.id}
+          data-episode-artwork={episode.id}
           className="block h-12 w-12 shrink-0 overflow-hidden rounded-md"
           aria-label={`Back to ${podcast.title} episodes`}
         >
@@ -81,7 +87,11 @@ export const EpisodeSidebar = memo(function EpisodeSidebar({ podcast, episode, s
           )}
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 id="episode-title-compact" className="truncate text-sm font-medium">
+          <h1
+            id="episode-title-compact"
+            data-episode-title={episode.id}
+            className="truncate text-sm font-medium"
+          >
             {episode.title}
           </h1>
           <p className="truncate text-xs text-base-content/60">{podcast.title}</p>
@@ -109,6 +119,8 @@ export const EpisodeSidebar = memo(function EpisodeSidebar({ podcast, episode, s
         <Link
           to="/$slug/$id"
           params={{ slug, id: podcast.id }}
+          data-podcast-artwork={podcast.id}
+          data-episode-artwork={episode.id}
           className="block shrink-0 overflow-hidden rounded-lg"
           aria-label={`Back to ${podcast.title} episodes`}
         >
@@ -131,7 +143,11 @@ export const EpisodeSidebar = memo(function EpisodeSidebar({ podcast, episode, s
           )}
         </Link>
         <div className="min-w-0">
-          <h1 id="episode-title-full" className="text-sm font-medium">
+          <h1
+            id="episode-title-full"
+            data-episode-title={episode.id}
+            className="text-sm font-medium"
+          >
             {episode.title}
           </h1>
           <p className="text-xs text-base-content/60">{podcast.title}</p>
