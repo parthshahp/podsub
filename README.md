@@ -63,7 +63,7 @@ does not guarantee the audio will remain available upstream.
 ## Prerequisites
 
 - Node.js + `pnpm`
-- `ffmpeg` on your `PATH` (audio chunking and clip export shell out to it)
+- `ffmpeg` and `ffprobe` on your `PATH` (audio chunking, timestamp probing, and clip export)
 
 ## Configuration
 
@@ -157,6 +157,17 @@ check the manifest/icons and activated worker; simulate Offline and open a playe
 deep link to check the fallback. Reconnect and retry. Verify audio seeking and
 API writes online, and deploy a second build while playing to check that it waits
 until existing windows close before activating.
+
+## Audio regression tests
+
+Run `pnpm --filter @podsub/server test` with ffmpeg/ffprobe installed. Tests check
+decoded chunk timing at 8 kHz and 44.1 kHz, invalid trailing fragments, valid short
+endings, and source-aware cache validators.
+
+Audio and clips are cached with revalidation against the current local source.
+This does not refresh an upstream enclosure while its downloaded file remains
+cached. Previously stored year-long browser responses may require a cache clear;
+existing transcripts need retranscription to pick up corrected chunk timestamps.
 
 ## Dictionary
 
