@@ -1,5 +1,8 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
+
+import { audioEtag } from "./audio-cache.js";
 
 const execFileP = promisify(execFile);
 
@@ -9,6 +12,19 @@ export const MAX_CLIP_SECONDS = 60;
 // Encoded 60 s at 128 kbit/s is ~1 MB; headroom to fail fast on surprises.
 const FFMPEG_MAX_BUFFER = 15 * 1024 * 1024;
 const FFMPEG_TIMEOUT_MS = 30_000;
+
+export function clipEtag(
+  audioUrl: string,
+  size: number,
+  mtimeMs: number,
+  start: number,
+  end: number,
+): string {
+  const h = createHash("sha256");
+  h.update(audioEtag(audioUrl, size, mtimeMs));
+  h.update(`:mp3-128k-v1:${start}:${end}`);
+  return `"${h.digest("hex").slice(0, 32)}"`;
+}
 
 /** Slice [startSec, endSec) out of a cached file as 128 kbit/s MP3. */
 export async function cutAudioClip(
