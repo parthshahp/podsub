@@ -7,6 +7,7 @@ import type { EpisodeListItem } from "../types";
 const PAGE_SIZE = 50;
 
 export type EpisodeListPage = { episodes: EpisodeListItem[]; total: number };
+export type PodcastFilter = { mode: "include" | "exclude"; ids: string[] };
 
 type Options = {
   /** Loader-provided first page (active episodes, no search). */
@@ -37,6 +38,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   const [hasTranscriptOnly, setHasTranscriptOnly] = useState(false);
   // When true, only in-progress episodes (saved position >= 5s) are listed.
   const [inProgressOnly, setInProgressOnly] = useState(false);
+  const [podcastFilter, setPodcastFilter] = useState<PodcastFilter>({ mode: "include", ids: [] });
   // Fresh page-0 + total after the archived toggle changes; null means the
   // loader's first page is still current.
   const [page0, setPage0] = useState<EpisodeListPage | null>(null);
@@ -81,13 +83,19 @@ export function useEpisodeList({ initial, podcastId }: Options) {
           ...(hasTranscriptOnly ? { hasTranscriptOnly: "true" } : {}),
           ...(inProgressOnly ? { inProgressOnly: "true" } : {}),
           ...(podcastId !== undefined ? { podcastId } : {}),
+          ...(podcastFilter.ids.length > 0
+            ? {
+                [podcastFilter.mode === "include" ? "includePodcastIds" : "excludePodcastIds"]:
+                  podcastFilter.ids.join(","),
+              }
+            : {}),
         },
       });
       const data = await res.json();
       if ("error" in data) throw new Error(data.error);
       return { episodes: data.episodes, total: data.total };
     },
-    [podcastId],
+    [podcastId, podcastFilter],
   );
 
   // Reset pagination when the scope or search changes.
@@ -111,6 +119,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
 
   // Skip the refetch on first mount — the loader already fetched page 0.
   const firstRender = useRef(true);
+  const pageGeneration = useRef(0);
 
   // Re-fetch page 0 when a filter toggle (or scope) changes, since the
   // loader only fetches the default unfiltered first page.
@@ -120,8 +129,18 @@ export function useEpisodeList({ initial, podcastId }: Options) {
       return;
     }
     let cancelled = false;
+    pageGeneration.current += 1;
     setExtraPages([]);
-    fetchPage({ limit: PAGE_SIZE, offset: 0, q: "", includeArchived: showArchived, hasTranscriptOnly, inProgressOnly })
+    setLoadingMore(false);
+    setLoadError(null);
+    fetchPage({
+      limit: PAGE_SIZE,
+      offset: 0,
+      q: "",
+      includeArchived: showArchived,
+      hasTranscriptOnly,
+      inProgressOnly,
+    })
       .then((page) => {
         if (!cancelled) setPage0(page);
       })
@@ -138,8 +157,17 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   useEffect(() => {
     if (!isSearching) return;
     let cancelled = false;
+    pageGeneration.current += 1;
+    setLoadingMore(false);
     setSearchError(null);
-    fetchPage({ limit: PAGE_SIZE, offset: 0, q: trimmedSearch, includeArchived: showArchived, hasTranscriptOnly, inProgressOnly })
+    fetchPage({
+      limit: PAGE_SIZE,
+      offset: 0,
+      q: trimmedSearch,
+      includeArchived: showArchived,
+      hasTranscriptOnly,
+      inProgressOnly,
+    })
       .then((page) => {
         if (!cancelled) setSearchPage(page);
       })
@@ -159,6 +187,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   const hasMore = episodes.length < shownTotal;
 
   async function loadMore() {
+    const generation = pageGeneration.current;
     setLoadError(null);
     setLoadingMore(true);
     try {
@@ -170,15 +199,17 @@ export function useEpisodeList({ initial, podcastId }: Options) {
         hasTranscriptOnly,
         inProgressOnly,
       });
+      if (generation !== pageGeneration.current) return;
       if (isSearching) {
         setSearchPage((prev) => ({ ...prev, episodes: [...prev.episodes, ...page.episodes] }));
       } else {
         setExtraPages((prev) => [...prev, ...page.episodes]);
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      if (generation === pageGeneration.current)
+        setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoadingMore(false);
+      if (generation === pageGeneration.current) setLoadingMore(false);
     }
   }
 
@@ -281,6 +312,8 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     setHasTranscriptOnly,
     inProgressOnly,
     setInProgressOnly,
+    podcastFilter,
+    setPodcastFilter,
     loadMore,
     loadingMore,
     loadError: loadError ?? searchError ?? archiveError ?? transcriptError,

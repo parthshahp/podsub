@@ -85,6 +85,13 @@ export const EpisodeSchema = z.object({
   transcribeStatus: TranscribeStatusSchema.default("idle"),
 });
 
+const PodcastIdsQuerySchema = z
+  .string()
+  .max(20000)
+  .transform((value) => value.split(",").filter(Boolean))
+  .pipe(z.array(z.string().min(1).max(200)).max(500))
+  .optional();
+
 /** Query params for paginated episode lists (?limit=50&offset=0&q=…). */
 export const ListEpisodesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -99,6 +106,9 @@ export const ListEpisodesQuerySchema = z.object({
   inProgressOnly: z.coerce.boolean().optional().default(false),
   /** Optional podcast scope; omit to list episodes across all podcasts. */
   podcastId: z.string().optional(),
+  /** Comma-separated podcast IDs to include or exclude before pagination. */
+  includePodcastIds: PodcastIdsQuerySchema,
+  excludePodcastIds: PodcastIdsQuerySchema,
 });
 
 /** Parent podcast summary joined into episode list rows. */
