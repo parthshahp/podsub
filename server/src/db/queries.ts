@@ -110,6 +110,8 @@ function cachedPrepare(sql: string): ReturnType<typeof db.prepare> {
 export type EpisodeListFilters = {
   /** Omit to list episodes across all podcasts. */
   podcastId?: string;
+  includePodcastIds?: string[];
+  excludePodcastIds?: string[];
   /** Case-insensitive title filter; empty means no filtering. */
   q?: string;
   /** When true, archived episodes are included; otherwise they are hidden. */
@@ -122,10 +124,24 @@ export type EpisodeListFilters = {
 
 function buildEpisodeListSql(
   kind: "list" | "count",
-  { podcastId, q, includeArchived, hasTranscriptOnly, inProgressOnly }: EpisodeListFilters,
+  {
+    podcastId,
+    includePodcastIds,
+    excludePodcastIds,
+    q,
+    includeArchived,
+    hasTranscriptOnly,
+    inProgressOnly,
+  }: EpisodeListFilters,
 ): string {
   const where: string[] = [];
   if (podcastId !== undefined) where.push("e.podcast_id = @podcastId");
+  if (includePodcastIds?.length) {
+    where.push("e.podcast_id IN (SELECT value FROM json_each(@includePodcastIds))");
+  }
+  if (excludePodcastIds?.length) {
+    where.push("e.podcast_id NOT IN (SELECT value FROM json_each(@excludePodcastIds))");
+  }
   if (!includeArchived) where.push("e.archived = 0");
   if (hasTranscriptOnly) where.push("EXISTS (SELECT 1 FROM transcript WHERE episode_id = e.id)");
   // In progress mirrors the client's isInProgress: a saved position at or
@@ -154,6 +170,10 @@ export function listEpisodes(filters: EpisodeListFilters & { limit: number; offs
 } {
   const params: Record<string, string | number> = {};
   if (filters.podcastId !== undefined) params.podcastId = filters.podcastId;
+  if (filters.includePodcastIds?.length)
+    params.includePodcastIds = JSON.stringify(filters.includePodcastIds);
+  if (filters.excludePodcastIds?.length)
+    params.excludePodcastIds = JSON.stringify(filters.excludePodcastIds);
   const needle = (filters.q ?? "").trim();
   if (needle !== "") {
     // Escape LIKE metacharacters for a literal substring match.

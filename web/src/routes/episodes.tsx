@@ -4,14 +4,19 @@ import { api } from "../api";
 import EpisodeList from "../components/EpisodeList";
 import { ArchiveIcon, PlayIcon, TranscriptIcon } from "../components/icons";
 import PageShell, { pageLoadState } from "../components/PageShell";
+import PodcastFilter from "../components/PodcastFilter";
 import { useEpisodeList } from "../hooks/useEpisodeList";
 
 export const Route = createFileRoute("/episodes")({
   loader: async () => {
-    const res = await api.api.episodes.$get({ query: { limit: "50", offset: "0" } });
-    const data = await res.json();
+    const [res, podcastsRes] = await Promise.all([
+      api.api.episodes.$get({ query: { limit: "50", offset: "0" } }),
+      api.api.podcasts.$get(),
+    ]);
+    const [data, podcasts] = await Promise.all([res.json(), podcastsRes.json()]);
     if ("error" in data) throw new Error(data.error);
-    return data;
+    if (!podcastsRes.ok) throw new Error("Could not load podcasts");
+    return { ...data, podcasts };
   },
   ...pageLoadState("episodes"),
   component: AllEpisodes,
@@ -33,6 +38,15 @@ function AllEpisodes() {
         onQueryChange={list.setQuery}
         searching={list.searching}
         showPodcast
+        groupByMonth
+        podcastFilterActive={list.podcastFilter.ids.length > 0}
+        filterControls={
+          <PodcastFilter
+            podcasts={initial.podcasts}
+            value={list.podcastFilter}
+            onChange={list.setPodcastFilter}
+          />
+        }
         onPlay={(e) => navigate({ to: "/player/$episodeId", params: { episodeId: e.id } })}
         hasMore={list.hasMore}
         loadingMore={list.loadingMore}

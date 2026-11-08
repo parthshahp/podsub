@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 
 import { ArchiveIcon, PlayIcon, SearchIcon, TranscriptIcon, UnarchiveIcon } from "./icons";
 import { formatClock, formatDate, formatDuration } from "../lib/format";
+import { groupEpisodesByMonth } from "../lib/groupEpisodesByMonth";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
 import type { EpisodeListItem } from "../types";
@@ -42,8 +43,12 @@ type Props = {
   transcriptStartedIds: Set<string>;
   /** Toggle-pill filters rendered under the search bar (empty = no filter row). */
   filters: EpisodeFilter[];
+  filterControls?: ReactNode;
+  podcastFilterActive?: boolean;
   /** Render the parent podcast under each title (all-episodes page). */
   showPodcast?: boolean;
+  /** Add publication month headings (all-episodes page only). */
+  groupByMonth?: boolean;
   hasMore: boolean;
   loadingMore: boolean;
   loadError: string | null;
@@ -104,14 +109,21 @@ export default function EpisodeList({
   transcriptPendingId,
   transcriptStartedIds,
   filters,
+  filterControls,
+  podcastFilterActive = false,
   showPodcast = false,
+  groupByMonth = false,
   hasMore,
   loadingMore,
   loadError,
   onLoadMore,
 }: Props) {
   const trimmed = query.trim();
-  const anyFilterActive = filters.some((f) => f.active);
+  const anyFilterActive = podcastFilterActive || filters.some((f) => f.active);
+  const groups =
+    groupByMonth && episodes.length > 0
+      ? groupEpisodesByMonth(episodes)
+      : [{ key: "all", label: null, episodes }];
   return (
     <>
       <div className="mt-10 flex items-center justify-between gap-3 border-b border-base-300 pb-3 sm:gap-6">
@@ -146,7 +158,7 @@ export default function EpisodeList({
         </span>
       </div>
 
-      {filters.length > 0 && (
+      {(filters.length > 0 || filterControls) && (
         <div
           className="mt-4 flex flex-wrap items-center gap-2"
           role="group"
@@ -168,164 +180,175 @@ export default function EpisodeList({
               {f.label}
             </button>
           ))}
+          {filterControls}
         </div>
       )}
 
-      <ul className="divide-y divide-base-300">
-        {episodes.map((e) => (
-          <li
-            key={e.id}
-            className={`episode-row flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6 ${e.archived ? "opacity-50" : ""}`}
-          >
-            <MobileEpisodeRow
-              episode={e}
-              showPodcast={showPodcast}
-              onPlay={() => onPlay(e)}
-              onArchive={() => onToggleArchive(e)}
-              onTranscript={() => onDownloadTranscript(e)}
-              archiving={archivePendingId === e.id}
-              startingTranscript={transcriptPendingId === e.id}
-              transcriptStarted={transcriptStartedIds.has(e.id)}
-            />
-            {showPodcast ? (
-              <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto sm:flex-1 sm:gap-4">
-                <Link
-                  to="/$slug/$id"
-                  params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
-                  data-episode-artwork={e.id}
-                  className="shrink-0 no-underline"
-                  aria-label={e.podcast.title}
-                >
-                  {e.podcast.imageUrl ? (
-                    <img
-                      src={podcastImageUrl(e.podcast.id, 96)}
-                      srcSet={podcastImageSrcSet(e.podcast.id, 96, 256)}
-                      alt=""
-                      width={48}
-                      height={48}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-12 w-12 rounded-md object-cover"
-                    />
-                  ) : (
-                    <span aria-hidden className="block h-12 w-12 rounded-md bg-base-300" />
-                  )}
-                </Link>
-                <div className="min-w-0">
-                  <Link
-                    to="/player/$episodeId"
-                    params={{ episodeId: e.id }}
-                    data-episode-title={e.id}
-                    className="block truncate text-[15px] font-medium no-underline hover:underline"
-                  >
-                    {e.title}
-                  </Link>
-                  <Link
-                    to="/$slug/$id"
-                    params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
-                    className="mt-0.5 block truncate text-xs text-base-content/50 no-underline hover:text-primary hover:underline"
-                  >
-                    {e.podcast.title}
-                  </Link>
-                  <EpisodeProgressLine e={e} />
-                </div>
-              </div>
-            ) : (
-              <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-                <Link
-                  to="/player/$episodeId"
-                  params={{ episodeId: e.id }}
-                  data-episode-title={e.id}
-                  className="block truncate text-[15px] font-medium no-underline hover:underline"
-                >
-                  {e.title}
-                </Link>
-                <EpisodeProgressLine e={e} />
-              </div>
-            )}
-            {/* Fixed width keeps the column aligned across rows; wide enough for
-                "September 30, 2025" so the year never wraps onto a second line. */}
-            <span className="shrink-0 text-sm text-base-content/60 sm:w-36 sm:text-right">
-              {e.publishedAt ? formatDate(e.publishedAt) : ""}
-            </span>
-            <span className="shrink-0 text-sm text-base-content/60 tabular-nums sm:w-16 sm:text-right">
-              {e.durationSec != null ? formatDuration(e.durationSec) : ""}
-            </span>
-            <div className="ml-auto flex shrink-0 items-center gap-1 sm:contents">
-              {e.hasTranscript ? (
-                <Link
-                  to="/player/$episodeId"
-                  params={{ episodeId: e.id }}
-                  className="btn btn-ghost btn-circle min-h-11 min-w-11 text-success"
-                  aria-label={`View transcript for ${e.title}`}
-                  title="Transcript downloaded — view it"
-                >
-                  <TranscriptIcon className="h-5 w-5" />
-                </Link>
-              ) : transcriptPendingId === e.id ? (
-                <button
-                  className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                  disabled
-                  aria-label={`Starting transcript download for ${e.title}`}
-                  title="Starting transcript download…"
-                >
-                  <span className="loading loading-spinner loading-xs" />
-                </button>
-              ) : transcriptStartedIds.has(e.id) ||
-                e.transcribeStatus === "queued" ||
-                e.transcribeStatus === "running" ? (
-                <button
-                  className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                  disabled
-                  aria-label={`Transcript download in progress for ${e.title}`}
-                  title="Transcript download in progress — check back soon"
-                >
-                  <TranscriptIcon className="h-5 w-5 opacity-40" />
-                </button>
-              ) : (
-                <button
-                  className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                  onClick={() => onDownloadTranscript(e)}
-                  aria-label={`Download transcript for ${e.title}`}
-                  title="Download transcript"
-                >
-                  <TranscriptIcon className="h-5 w-5 opacity-40" />
-                </button>
-              )}
-              <button
-                className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                onClick={() => onToggleArchive(e)}
-                disabled={archivePendingId === e.id}
-                aria-label={e.archived ? `Unarchive ${e.title}` : `Archive ${e.title}`}
-                title={e.archived ? "Unarchive episode" : "Archive episode"}
+      {groups.map((group) => (
+        <div key={group.key} className={group.label ? "mt-8" : undefined}>
+          {group.label && (
+            <h2 className="mb-1 flex items-center gap-4 text-xs font-semibold tracking-wide text-base-content/60 uppercase">
+              {group.label}
+              <span aria-hidden="true" className="h-px flex-1 bg-base-300" />
+            </h2>
+          )}
+          <ul className="divide-y divide-base-300">
+            {group.episodes.map((e) => (
+              <li
+                key={e.id}
+                className={`episode-row flex flex-wrap items-center gap-x-4 gap-y-1 py-4 sm:flex-nowrap sm:gap-6 ${e.archived ? "opacity-50" : ""}`}
               >
-                {e.archived ? (
-                  <UnarchiveIcon className="h-5 w-5" />
+                <MobileEpisodeRow
+                  episode={e}
+                  showPodcast={showPodcast}
+                  onPlay={() => onPlay(e)}
+                  onArchive={() => onToggleArchive(e)}
+                  onTranscript={() => onDownloadTranscript(e)}
+                  archiving={archivePendingId === e.id}
+                  startingTranscript={transcriptPendingId === e.id}
+                  transcriptStarted={transcriptStartedIds.has(e.id)}
+                />
+                {showPodcast ? (
+                  <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto sm:flex-1 sm:gap-4">
+                    <Link
+                      to="/$slug/$id"
+                      params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
+                      data-episode-artwork={e.id}
+                      className="shrink-0 no-underline"
+                      aria-label={e.podcast.title}
+                    >
+                      {e.podcast.imageUrl ? (
+                        <img
+                          src={podcastImageUrl(e.podcast.id, 96)}
+                          srcSet={podcastImageSrcSet(e.podcast.id, 96, 256)}
+                          alt=""
+                          width={48}
+                          height={48}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-12 w-12 rounded-md object-cover"
+                        />
+                      ) : (
+                        <span aria-hidden className="block h-12 w-12 rounded-md bg-base-300" />
+                      )}
+                    </Link>
+                    <div className="min-w-0">
+                      <Link
+                        to="/player/$episodeId"
+                        params={{ episodeId: e.id }}
+                        data-episode-title={e.id}
+                        className="block truncate text-[15px] font-medium no-underline hover:underline"
+                      >
+                        {e.title}
+                      </Link>
+                      <Link
+                        to="/$slug/$id"
+                        params={{ slug: kebabCase(e.podcast.title), id: e.podcast.id }}
+                        className="mt-0.5 block truncate text-xs text-base-content/50 no-underline hover:text-primary hover:underline"
+                      >
+                        {e.podcast.title}
+                      </Link>
+                      <EpisodeProgressLine e={e} />
+                    </div>
+                  </div>
                 ) : (
-                  <ArchiveIcon className="h-5 w-5" />
+                  <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+                    <Link
+                      to="/player/$episodeId"
+                      params={{ episodeId: e.id }}
+                      data-episode-title={e.id}
+                      className="block truncate text-[15px] font-medium no-underline hover:underline"
+                    >
+                      {e.title}
+                    </Link>
+                    <EpisodeProgressLine e={e} />
+                  </div>
                 )}
-              </button>
-              <button
-                className="btn btn-ghost btn-circle min-h-11 min-w-11"
-                onClick={() => onPlay(e)}
-                aria-label={isInProgress(e) ? `Resume ${e.title}` : `Play ${e.title}`}
-                title={isInProgress(e) ? "Resume from where you left off" : undefined}
-              >
-                <PlayIcon className="h-5 w-5" />
-              </button>
-            </div>
-          </li>
-        ))}
-        {episodes.length === 0 && (
-          <li className="py-6 text-sm text-base-content/60">
-            {trimmed
-              ? `No episodes match “${trimmed}”.`
-              : anyFilterActive
-                ? "No episodes match these filters."
-                : "No episodes."}
-          </li>
-        )}
-      </ul>
+                {/* Fixed width keeps the column aligned across rows; wide enough for
+                "September 30, 2025" so the year never wraps onto a second line. */}
+                <span className="shrink-0 text-sm text-base-content/60 sm:w-36 sm:text-right">
+                  {e.publishedAt ? formatDate(e.publishedAt) : ""}
+                </span>
+                <span className="shrink-0 text-sm text-base-content/60 tabular-nums sm:w-16 sm:text-right">
+                  {e.durationSec != null ? formatDuration(e.durationSec) : ""}
+                </span>
+                <div className="ml-auto flex shrink-0 items-center gap-1 sm:contents">
+                  {e.hasTranscript ? (
+                    <Link
+                      to="/player/$episodeId"
+                      params={{ episodeId: e.id }}
+                      className="btn btn-ghost btn-circle min-h-11 min-w-11 text-success"
+                      aria-label={`View transcript for ${e.title}`}
+                      title="Transcript downloaded — view it"
+                    >
+                      <TranscriptIcon className="h-5 w-5" />
+                    </Link>
+                  ) : transcriptPendingId === e.id ? (
+                    <button
+                      className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                      disabled
+                      aria-label={`Starting transcript download for ${e.title}`}
+                      title="Starting transcript download…"
+                    >
+                      <span className="loading loading-spinner loading-xs" />
+                    </button>
+                  ) : transcriptStartedIds.has(e.id) ||
+                    e.transcribeStatus === "queued" ||
+                    e.transcribeStatus === "running" ? (
+                    <button
+                      className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                      disabled
+                      aria-label={`Transcript download in progress for ${e.title}`}
+                      title="Transcript download in progress — check back soon"
+                    >
+                      <TranscriptIcon className="h-5 w-5 opacity-40" />
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                      onClick={() => onDownloadTranscript(e)}
+                      aria-label={`Download transcript for ${e.title}`}
+                      title="Download transcript"
+                    >
+                      <TranscriptIcon className="h-5 w-5 opacity-40" />
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                    onClick={() => onToggleArchive(e)}
+                    disabled={archivePendingId === e.id}
+                    aria-label={e.archived ? `Unarchive ${e.title}` : `Archive ${e.title}`}
+                    title={e.archived ? "Unarchive episode" : "Archive episode"}
+                  >
+                    {e.archived ? (
+                      <UnarchiveIcon className="h-5 w-5" />
+                    ) : (
+                      <ArchiveIcon className="h-5 w-5" />
+                    )}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-circle min-h-11 min-w-11"
+                    onClick={() => onPlay(e)}
+                    aria-label={isInProgress(e) ? `Resume ${e.title}` : `Play ${e.title}`}
+                    title={isInProgress(e) ? "Resume from where you left off" : undefined}
+                  >
+                    <PlayIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </li>
+            ))}
+            {episodes.length === 0 && (
+              <li className="py-6 text-sm text-base-content/60">
+                {trimmed
+                  ? `No episodes match “${trimmed}”.`
+                  : anyFilterActive
+                    ? "No episodes match these filters."
+                    : "No episodes."}
+              </li>
+            )}
+          </ul>
+        </div>
+      ))}
 
       {hasMore && (
         <div className="mt-6 flex flex-col items-center gap-2">
@@ -333,8 +356,12 @@ export default function EpisodeList({
             {loadingMore && <span className="loading loading-spinner loading-sm" />}
             {loadingMore ? "Loading…" : `Load more (${total - episodes.length} more)`}
           </button>
-          {loadError && <p className="text-sm text-error">{loadError}</p>}
         </div>
+      )}
+      {loadError && (
+        <p role="alert" className="mt-3 text-sm text-error">
+          {loadError}
+        </p>
       )}
     </>
   );
