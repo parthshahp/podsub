@@ -5,14 +5,16 @@ import { api } from "../api";
 import { SearchIcon } from "./icons";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageSrcSet, podcastImageUrl } from "../lib/podcastImage";
+import { isPodcastSort, podcastSortOptions, type PodcastSort } from "../lib/sortPodcasts";
 import type { PodcastList } from "../types";
 
 type Props = {
   filteredPodcasts: PodcastList[];
   q: string | undefined;
+  sort: PodcastSort;
 };
 
-export default function PodcastList({ filteredPodcasts, q }: Props) {
+export default function PodcastList({ filteredPodcasts, q, sort }: Props) {
   const navigate = useNavigate({ from: "/" });
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -26,23 +28,48 @@ export default function PodcastList({ filteredPodcasts, q }: Props) {
         <RssFeedForm />
       </div>
 
-      <label className="input mb-8 flex w-full items-center gap-2">
-        <SearchIcon className="h-4 w-4 shrink-0 text-base-content/40" />
-        <input
-          type="search"
-          placeholder="Filter podcasts…"
-          aria-label="Filter podcasts"
-          value={q ?? ""}
-          onChange={(e) => {
-            navigate({
-              search: { q: e.target.value },
-              replace: true,
-              resetScroll: false,
-            });
-          }}
-          className="grow"
-        />
-      </label>
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="input flex w-full min-w-0 items-center gap-2 sm:flex-1">
+          <SearchIcon className="h-4 w-4 shrink-0 text-base-content/40" />
+          <input
+            type="search"
+            placeholder="Filter podcasts…"
+            aria-label="Filter podcasts"
+            value={q ?? ""}
+            onChange={(e) => {
+              navigate({
+                search: (previous) => ({ ...previous, q: e.target.value }),
+                replace: true,
+                resetScroll: false,
+              });
+            }}
+            className="grow"
+          />
+        </label>
+        <label className="flex shrink-0 items-center gap-2 text-sm text-base-content/60">
+          <span>Sort by</span>
+          <select
+            aria-label="Sort podcasts"
+            className="select min-w-0 flex-1 text-base text-base-content sm:flex-none sm:text-sm"
+            value={sort}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (!isPodcastSort(next)) return;
+              navigate({
+                search: (previous) => ({ ...previous, sort: next }),
+                replace: true,
+                resetScroll: false,
+              });
+            }}
+          >
+            {podcastSortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {filteredPodcasts.length > 0 ? (
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-6 gap-y-8">

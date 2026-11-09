@@ -23,7 +23,9 @@ const migrations = new URL("../data/migrations/", import.meta.url);
 for (const file of (await readdir(migrations)).filter((name) => name.endsWith(".sql")).sort()) {
   db.exec(await readFile(new URL(file, migrations), "utf8"));
 }
-const listEpisodes = new vm.Script(javascript + "\nlistEpisodes;").runInNewContext({ db });
+const { listEpisodes, listPodcasts } = new vm.Script(
+  javascript + "\n({ listEpisodes, listPodcasts });",
+).runInNewContext({ db });
 
 db.exec(`
   INSERT INTO podcast (id, feed_url, title, created_at, updated_at)
@@ -81,6 +83,20 @@ test("query validation parses and bounds podcast selections", () => {
       .success,
     false,
   );
+});
+
+test("podcast summaries expose added date and latest publication across all episodes", () => {
+  db.prepare(
+    "INSERT INTO podcast (id, feed_url, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+  ).run("empty", "https://empty.test", "Empty", 100, 200);
+  const podcasts = listPodcasts();
+  assert.equal(
+    podcasts.find((podcast) => podcast.id === "a").latestEpisodeAt,
+    new Date(4000).toISOString(),
+  );
+  const empty = podcasts.find((podcast) => podcast.id === "empty");
+  assert.equal(empty.latestEpisodeAt, null);
+  assert.equal(empty.createdAt, new Date(100000).toISOString());
 });
 
 test.after(() => db.close());
