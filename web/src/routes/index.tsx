@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { api } from "../api";
 import PageShell, { pageLoadState } from "../components/PageShell";
 import PodcastList from "../components/PodcastList";
+import { isPodcastSort, sortPodcasts } from "../lib/sortPodcasts";
 
 // List, pending state and error state share one shell so the scroll container
 // doesn't appear and disappear across loads.
@@ -12,7 +13,8 @@ const LIST_SHELL = "min-h-0 flex-1 overflow-y-auto";
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => {
     const q = typeof search.q === "string" ? search.q : undefined;
-    return q ? { q } : {};
+    const sort = isPodcastSort(search.sort) ? search.sort : undefined;
+    return { ...(q ? { q } : {}), ...(sort ? { sort } : {}) };
   },
   loader: async () => {
     const res = await api.api.podcasts.$get();
@@ -25,14 +27,17 @@ export const Route = createFileRoute("/")({
 
 function PodcastsPage() {
   const { podcasts } = Route.useLoaderData();
-  const { q } = Route.useSearch();
+  const { q, sort = "added" } = Route.useSearch();
   const filtered = useMemo(() => {
     const needle = q?.trim().toLowerCase();
-    return needle ? podcasts.filter((p) => p.title.toLowerCase().includes(needle)) : podcasts;
-  }, [podcasts, q]);
+    const matching = needle
+      ? podcasts.filter((p) => p.title.toLowerCase().includes(needle))
+      : podcasts;
+    return sortPodcasts(matching, sort);
+  }, [podcasts, q, sort]);
   return (
     <PageShell className={LIST_SHELL}>
-      <PodcastList filteredPodcasts={filtered} q={q} />
+      <PodcastList filteredPodcasts={filtered} q={q} sort={sort} />
     </PageShell>
   );
 }

@@ -49,6 +49,8 @@ export const PodcastListSchema = z.object({
   id: z.string(),
   title: z.string(),
   imageUrl: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  latestEpisodeAt: z.iso.datetime().nullable(),
 });
 
 /** Live transcription queue state, mirrored from the server job registry.

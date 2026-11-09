@@ -73,7 +73,9 @@ const upsertPodcastStmt = db.prepare(`
 `);
 
 const listPodcastsStmt = db.prepare(`
-  SELECT id, title, image_url FROM podcast ORDER BY created_at
+  SELECT p.id, p.title, p.image_url, p.created_at,
+    (SELECT MAX(e.published_at) FROM podcast_episode e WHERE e.podcast_id = p.id) AS latest_episode_at
+  FROM podcast p ORDER BY p.created_at
 `);
 
 const listPodcastFeedsStmt = db.prepare(`
@@ -223,7 +225,7 @@ const upsertEpisodeStmt = db.prepare(`
 `);
 
 export function listPodcasts(): PodcastList[] {
-  const rows = listPodcastsStmt.all() as Array<Pick<PodcastRow, "id" | "title" | "image_url">>;
+  const rows = listPodcastsStmt.all() as PodcastListRow[];
   return rows.map(podcastFromPodcastList);
 }
 
@@ -477,12 +479,17 @@ export function podcastFromRow(row: PodcastRow): Podcast {
   };
 }
 
-export function podcastFromPodcastList(
-  row: Pick<PodcastRow, "id" | "title" | "image_url">,
-): PodcastList {
+type PodcastListRow = Pick<PodcastRow, "id" | "title" | "image_url" | "created_at"> & {
+  latest_episode_at: number | null;
+};
+
+export function podcastFromPodcastList(row: PodcastListRow): PodcastList {
   return {
     id: row.id,
     title: row.title,
     imageUrl: row.image_url,
+    createdAt: new Date(row.created_at * 1000).toISOString(),
+    latestEpisodeAt:
+      row.latest_episode_at == null ? null : new Date(row.latest_episode_at * 1000).toISOString(),
   };
 }
