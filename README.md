@@ -8,6 +8,14 @@ Podcast transcription + side-by-side transcript player.
   (`mistralai/voxtral-small-transcribe-3-0`) in Settings.
 - `web/` — React SPA (Vite): podcast list + player with clickable transcript.
 
+Use the **sparkles** button beside any transcript line to translate it into English
+and explain its meaning, grammar, and useful expressions (with pinyin for Chinese).
+Choose the model under **Settings → AI translation & explanation**; DeepSeek V4.1
+Flash is the default. This reuses `OPENROUTER_API_KEY` on the server. Only the
+selected line and its immediate neighbors are sent on demand, and repeated
+explanations are cached in memory (up to 200 entries, cleared on server restart).
+Timestamp seeking and dictionary word lookups continue to work as before.
+
 ## Prerequisites
 
 - Node.js + `pnpm`

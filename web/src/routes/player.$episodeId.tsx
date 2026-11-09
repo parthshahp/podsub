@@ -135,6 +135,7 @@ function EpisodePage() {
 
         {transcript ? (
           <TranscriptSection
+            key={episode.id}
             episode={episode}
             lines={lines}
             togglePlay={togglePlay}

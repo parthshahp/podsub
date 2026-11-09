@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { EXPLANATION_MODEL_OPTIONS, ExplanationModelSchema } from "@podsub/schemas";
 
 import PageShell from "../components/PageShell";
+import { loadExplanationModel, saveExplanationModel } from "../lib/explanationSettings";
 import { getDeckNames, getModelFieldNames, getModelNames, getVersion } from "../lib/anki";
 import {
   CARD_SOURCES,
@@ -39,6 +41,7 @@ function SettingsPage() {
   const [justSaved, setJustSaved] = useState(false);
   const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [transcribeModel, setTranscribeModel] = useState(loadTranscriptionModel);
+  const [explanationModel, setExplanationModel] = useState(loadExplanationModel);
 
   // Ref so connect() reads latest state without re-creating on each keystroke.
   const stateRef = useRef({ deck, noteType, mappings });
@@ -160,8 +163,8 @@ function SettingsPage() {
         <div>
           <h2 className="font-medium">Transcription</h2>
           <p className="mt-1 text-sm text-base-content/60">
-            Model used for new transcriptions. Trying another model is worth a shot when one
-            fails on an episode — re-transcribing keeps both results and shows the latest.
+            Model used for new transcriptions. Trying another model is worth a shot when one fails
+            on an episode — re-transcribing keeps both results and shows the latest.
           </p>
         </div>
         <div className="space-y-2">
@@ -180,6 +183,41 @@ function SettingsPage() {
               </option>
             ))}
           </select>
+        </div>
+      </section>
+
+      <div className="divider" />
+
+      <section className="space-y-6">
+        <div>
+          <h2 className="font-medium">AI translation & explanation</h2>
+          <p className="mt-1 text-sm text-base-content/60">
+            Use the sparkles button beside a transcript line to translate it into English and
+            explain its meaning, grammar, and useful expressions. Uses the server’s existing
+            OpenRouter key. Only the selected line and neighboring context are sent, when you ask.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <label className="label" htmlFor="explanation-model">
+            Model
+          </label>
+          <select
+            id="explanation-model"
+            value={explanationModel}
+            onChange={(e) => {
+              const model = ExplanationModelSchema.parse(e.target.value);
+              setExplanationModel(model);
+              saveExplanationModel(model);
+            }}
+            className="select w-full"
+          >
+            {EXPLANATION_MODEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-base-content/60">Saved automatically on this device.</p>
         </div>
       </section>
 

@@ -123,6 +123,24 @@ export function TranscriptIcon({ className }: { className?: string }) {
   );
 }
 
+export function SparklesIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m10 3 2.4 6.6L19 12l-6.6 2.4L10 21l-2.4-6.6L1 12l6.6-2.4L10 3Z" />
+      <path d="M20 2v6M17 5h6M21 16v4M19 18h4" />
+    </svg>
+  );
+}
+
 export function ArchiveIcon({ className }: { className?: string }) {
   return (
     <svg
