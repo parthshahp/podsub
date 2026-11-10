@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && node scripts/build-pwa.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "dev": "pnpm --filter @podsub/schemas build && vite",
+    "build": "pnpm --filter @podsub/schemas build && vite build && node scripts/build-pwa.mjs",
+    "test": "pnpm --filter @podsub/schemas build && node --test tests/*.test.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm --filter @podsub/schemas build && tsc --noEmit"
   },
   "dependencies": {
     "@podsub/schemas": "workspace:*",
