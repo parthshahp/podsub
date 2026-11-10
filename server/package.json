@@ -6,11 +6,11 @@
   },
   "scripts": {
     "build:dict": "tsx scripts/build-dict.ts",
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "dev": "pnpm --filter @podsub/schemas build && tsx watch src/index.ts",
+    "build": "pnpm --filter @podsub/schemas build && tsc",
     "start": "node dist/index.js",
-    "test": "node --test tests/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "test": "pnpm --filter @podsub/schemas build && node --test tests/*.test.mjs",
+    "typecheck": "pnpm --filter @podsub/schemas build && tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

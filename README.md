@@ -50,6 +50,12 @@ pnpm typecheck   # tsc in all packages
 pnpm build       # build all packages
 ```
 
+The server and web `build`, `typecheck`, `test`, and `dev` scripts rebuild
+`@podsub/schemas` first. This also applies to filtered commands such as
+`pnpm --filter @podsub/server typecheck`, so fresh checkouts and deployments with
+cached `packages/schemas/dist` never check against stale shared declarations.
+Use these package scripts rather than calling `tsc` directly when deploying.
+
 ## Production (self-host)
 
 ```
