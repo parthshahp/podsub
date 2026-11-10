@@ -4,6 +4,7 @@ import { formatClock } from "../../lib/format";
 import { hasFinePointer } from "../../lib/mediaQueries";
 import type { TranscriptLineData } from "../../lib/transcriptView";
 import { WordSpans } from "../WordSpans";
+import { SparklesIcon } from "../icons";
 
 type TranscriptLineProps = {
   line: TranscriptLineData;
@@ -12,6 +13,7 @@ type TranscriptLineProps = {
   /** `${lineIndex}:${start}` key of the word whose dialog is open, if any. */
   dialogKey?: string | null;
   onSeek: (start: number) => void;
+  onExplain: (index: number, invoker: HTMLButtonElement) => void;
 };
 
 /**
@@ -32,6 +34,7 @@ export const TranscriptLine = memo(function TranscriptLine({
   isActive,
   dialogKey,
   onSeek,
+  onExplain,
 }: TranscriptLineProps) {
   const timeLabel = formatClock(line.start);
   return (
@@ -67,6 +70,16 @@ export const TranscriptLine = memo(function TranscriptLine({
           expandedKey={dialogKey}
         />
       </span>
+      <button
+        type="button"
+        onClick={(event) => onExplain(index, event.currentTarget)}
+        aria-label={`Translate and explain line at ${timeLabel}`}
+        aria-haspopup="dialog"
+        title="Translate & explain"
+        className="btn btn-ghost min-h-11 min-w-11 shrink-0 px-2 text-xs text-base-content/60 active:scale-[0.97] md:min-h-8 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100"
+      >
+        <SparklesIcon className="h-5 w-5" />
+      </button>
       {isActive && <span className="sr-only"> (current line)</span>}
     </li>
   );

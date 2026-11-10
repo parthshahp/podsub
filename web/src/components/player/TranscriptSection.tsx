@@ -1,4 +1,13 @@
-import { memo, useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
+import type { ExplanationModel } from "@podsub/schemas";
 
 import { usePlaybackShortcuts } from "../../hooks/usePlaybackShortcuts";
 import { useTranscriptFollow } from "../../hooks/useTranscriptFollow";
@@ -11,6 +20,8 @@ import type { WordHoverInfo } from "../WordSpans";
 import { DefinitionPopover } from "../DefinitionPopover";
 import { TranscriptPane } from "./TranscriptPane";
 import { PlaybackStatus } from "./PlaybackStatus";
+import { LineExplanationDialog } from "./LineExplanationDialog";
+import { loadExplanationModel } from "../../lib/explanationSettings";
 
 type TranscriptSectionProps = {
   episode: Episode;
@@ -100,6 +111,25 @@ export const TranscriptSection = memo(function TranscriptSection({
   // re-creating them (and invalidating the pane memo) per render.
   const linesRef = useRef(lines);
   linesRef.current = lines;
+
+  const [explanation, setExplanation] = useState<{
+    index: number;
+    line: TranscriptLineData;
+    model: ExplanationModel;
+    invoker: HTMLButtonElement;
+  } | null>(null);
+  const handleExplainLine = useCallback(
+    (index: number, invoker: HTMLButtonElement) => {
+      const line = linesRef.current[index];
+      if (!line) return;
+      closeDialog();
+      hideHoveredWord();
+      setFollow(false);
+      setExplanation({ index, line, model: loadExplanationModel(), invoker });
+    },
+    [closeDialog, hideHoveredWord, setFollow],
+  );
+  const handleExplanationClose = useCallback(() => setExplanation(null), []);
 
   /** Nearest word button for an event target, if the event hit one. */
   const wordButtonFrom = (target: EventTarget | null): HTMLElement | null =>
@@ -210,6 +240,7 @@ export const TranscriptSection = memo(function TranscriptSection({
         dialogKey={dialogKey}
         containerRef={containerRef}
         onSeekLine={handleSeekLine}
+        onExplainLine={handleExplainLine}
         onWordOver={handleWordOver}
         onWordOut={handleWordOut}
         onWordClick={handleWordClick}
@@ -217,6 +248,17 @@ export const TranscriptSection = memo(function TranscriptSection({
         onScroll={handlePaneScroll}
         onResumeFollow={handleResumeFollow}
       />
+      {explanation && (
+        <LineExplanationDialog
+          episodeId={episode.id}
+          lineIndex={explanation.index}
+          text={explanation.line.text}
+          start={explanation.line.start}
+          model={explanation.model}
+          invoker={explanation.invoker}
+          onClose={handleExplanationClose}
+        />
+      )}
       {activeWord && (
         <DefinitionPopover
           hover={activeWord}

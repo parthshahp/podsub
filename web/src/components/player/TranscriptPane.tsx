@@ -10,6 +10,7 @@ type TranscriptPaneProps = {
   dialogKey: string | null;
   containerRef: RefObject<HTMLOListElement | null>;
   onSeekLine: (start: number) => void;
+  onExplainLine: (index: number, invoker: HTMLButtonElement) => void;
   /**
    * Delegated word interactions — one listener per event on the <ol>,
    * reading the word button's data attributes. Stable across renders and
@@ -47,6 +48,7 @@ export const TranscriptPane = memo(function TranscriptPane({
   dialogKey,
   containerRef,
   onSeekLine,
+  onExplainLine,
   onWordOver,
   onWordOut,
   onWordClick,
@@ -75,6 +77,7 @@ export const TranscriptPane = memo(function TranscriptPane({
             isActive={i === activeIdx}
             dialogKey={dialogKey}
             onSeek={onSeekLine}
+            onExplain={onExplainLine}
           />
         ))}
       </ol>

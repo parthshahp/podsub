@@ -65,6 +65,41 @@ export const TranscribeEpisodeInputSchema = z.object({
   model: z.string().trim().min(1).max(200).optional(),
 });
 
+/** Shared allowlist for the settings selector and the paid OpenRouter endpoint. */
+export const EXPLANATION_MODEL_OPTIONS = [
+  { value: "deepseek/deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash (default)" },
+  { value: "qwen/qwen3.8-flash", label: "Qwen3.8 Flash" },
+  { value: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
+] as const;
+export const DEFAULT_EXPLANATION_MODEL = EXPLANATION_MODEL_OPTIONS[0].value;
+export const ExplanationModelSchema = z.enum(
+  EXPLANATION_MODEL_OPTIONS.map((option) => option.value),
+);
+
+export const ExplainLineInputSchema = z.object({
+  lineIndex: z.number().int().min(0),
+  /** Detect a stale transcript rather than explaining a different line. */
+  text: z.string().min(1).max(6000),
+  model: ExplanationModelSchema.default(DEFAULT_EXPLANATION_MODEL),
+});
+
+export const LineExplanationSchema = z
+  .object({
+    translation: z.string().trim().min(1).max(8000),
+    explanation: z.string().trim().min(1).max(12000),
+    phrases: z
+      .array(
+        z
+          .object({
+            phrase: z.string().trim().min(1).max(500),
+            meaning: z.string().trim().min(1).max(2000),
+          })
+          .strict(),
+      )
+      .max(8),
+  })
+  .strict();
+
 /** Domain shape for an episode (camelCase from the DB row). */
 export const EpisodeSchema = z.object({
   id: z.string(),
@@ -211,3 +246,5 @@ export type AnkiAction = (typeof ANKI_ACTIONS)[number];
 export type AnkiProxyInput = z.infer<typeof AnkiProxyInputSchema>;
 export type TranscribeStatus = z.infer<typeof TranscribeStatusSchema>;
 export type TranscribeEpisodeInput = z.infer<typeof TranscribeEpisodeInputSchema>;
+export type ExplanationModel = z.infer<typeof ExplanationModelSchema>;
+export type LineExplanation = z.infer<typeof LineExplanationSchema>;
