@@ -61,6 +61,16 @@ test("uses the server key, constrained output, and transcript context", async ()
   });
 });
 
+test("accepts a translation without unnecessary explanation or phrases", async () => {
+  const concise = { translation: "It's fine.", explanation: "", phrases: [] };
+  reply = () => Response.json({ choices: [{ message: { content: JSON.stringify(concise) } }] });
+  assert.deepEqual(await explainLine(input("concise-only")), concise);
+  const prompt = calls[0].body.messages[0].content;
+  assert.match(prompt, /do not invent details/i);
+  assert.match(prompt, /Do not split the sentence into words/i);
+  assert.match(prompt, /otherwise use an empty string/i);
+});
+
 test("deduplicates concurrent requests and caches by text, context, and model", async () => {
   const request = input("cache test");
   const results = await Promise.all([explainLine(request), explainLine(request)]);
