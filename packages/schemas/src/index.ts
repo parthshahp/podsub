@@ -86,7 +86,7 @@ export const ExplainLineInputSchema = z.object({
 export const LineExplanationSchema = z
   .object({
     translation: z.string().trim().min(1).max(8000),
-    explanation: z.string().trim().min(1).max(12000),
+    explanation: z.string().trim().max(12000),
     phrases: z
       .array(
         z

@@ -148,12 +148,14 @@ export const LineExplanationDialog = memo(function LineExplanationDialog({
               </h3>
               <p className="whitespace-pre-wrap">{result.data.translation}</p>
             </section>
-            <section aria-labelledby="line-meaning-heading">
-              <h3 id="line-meaning-heading" className="mb-1 font-semibold">
-                Meaning & usage
-              </h3>
-              <p className="whitespace-pre-wrap">{result.data.explanation}</p>
-            </section>
+            {result.data.explanation ? (
+              <section aria-labelledby="line-meaning-heading">
+                <h3 id="line-meaning-heading" className="mb-1 font-semibold">
+                  Meaning & usage
+                </h3>
+                <p className="whitespace-pre-wrap">{result.data.explanation}</p>
+              </section>
+            ) : null}
             {result.data.phrases.length > 0 && (
               <section aria-labelledby="line-phrases-heading">
                 <h3 id="line-phrases-heading" className="mb-2 font-semibold">
