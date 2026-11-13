@@ -26,7 +26,7 @@ export function usePlayer() {
   const [duration, setDuration] = useState(0);
   // Resume offset for a freshly loaded source. <audio> ignores currentTime
   // before metadata arrives, so this is applied in onLoadedMetadata.
-  const pendingStartRef = useRef<number | null>(null);
+  const pendingStartRef = useRef<{ time: number; resume: boolean } | null>(null);
 
   // Mutable time store + listener set (the useSyncExternalStore source).
   const timeRef = useRef(0);
@@ -46,24 +46,40 @@ export function usePlayer() {
     for (const cb of listenersRef.current) cb();
   }, []);
 
-  const togglePlay = useCallback(
-    (e: Episode) => {
+  // Explicit navigation is idempotent: opening a timestamp must never toggle
+  // an already-playing episode off or lose to its saved resume position.
+  const play = useCallback(
+    (e: Episode, startAt?: number) => {
       const audio = audioRef.current;
       if (!audio) return;
-      if (loadedEpisodeRef.current?.id === e.id && !audio.paused) {
-        audio.pause();
-        return;
-      }
+      const explicitStart = startAt !== undefined && Number.isFinite(startAt);
+      const sourceChanged =
+        loadedEpisodeRef.current?.id !== e.id || loadedEpisodeRef.current.audioUrl !== e.audioUrl;
       // One same-origin URL serves both playback and export clips.
-      if (loadedEpisodeRef.current?.id !== e.id || loadedEpisodeRef.current.audioUrl !== e.audioUrl) {
+      if (sourceChanged) {
         const url = episodeAudioUrl(e.id);
         // Compare raw strings: audio.src is the absolute resolved URL.
         audio.src = url;
-        // Archived rows never carry a position (the server pins them to 0).
-        const startAt = e.archived ? 0 : Math.max(0, e.positionSec ?? 0);
-        pendingStartRef.current = startAt > 0 ? startAt : null;
-        setTime(startAt);
         setDuration(e.durationSec ?? 0);
+      }
+      if (sourceChanged || explicitStart) {
+        // Archived rows never carry a position (the server pins them to 0).
+        const requested = Math.max(
+          0,
+          explicitStart ? startAt! : e.archived ? 0 : (e.positionSec ?? 0),
+        );
+        const position =
+          !sourceChanged && Number.isFinite(audio.duration)
+            ? Math.min(requested, audio.duration)
+            : requested;
+        pendingStartRef.current = { time: position, resume: !explicitStart };
+        setTime(position);
+        if (!sourceChanged && audio.readyState >= 1) {
+          audio.currentTime = Number.isFinite(audio.duration)
+            ? Math.min(position, audio.duration)
+            : position;
+          pendingStartRef.current = null;
+        }
       }
       loadedEpisodeRef.current = e;
       void audio.play().catch(() => {});
@@ -71,13 +87,29 @@ export function usePlayer() {
     [setTime],
   );
 
+  const togglePlay = useCallback(
+    (e: Episode) => {
+      const audio = audioRef.current;
+      if (audio && loadedEpisodeRef.current?.id === e.id && !audio.paused) audio.pause();
+      else play(e);
+    },
+    [play],
+  );
+
   // Stable identity so memoized transcript rows don't re-render each tick.
   const seek = useCallback(
     (t: number) => {
       const audio = audioRef.current;
       if (!audio || !Number.isFinite(t)) return;
-      const position = Math.max(0, Number.isFinite(audio.duration) ? Math.min(t, audio.duration) : t);
-      audio.currentTime = position;
+      const position = Math.max(
+        0,
+        Number.isFinite(audio.duration) ? Math.min(t, audio.duration) : t,
+      );
+      if (audio.readyState < 1) pendingStartRef.current = { time: position, resume: false };
+      else {
+        pendingStartRef.current = null;
+        audio.currentTime = position;
+      }
       setTime(position);
     },
     [setTime],
@@ -107,17 +139,25 @@ export function usePlayer() {
   // `durationSec` server backfill (a persistence side effect that must not
   // live in this hook). This one owns the player state — duration plus the
   // deferred resume seek.
-  const handleLoadedMetadata = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
-    const audio = e.currentTarget;
-    setDuration(audio.duration || 0);
-    // Apply the deferred resume offset now that seeking is possible.
-    const startAt = pendingStartRef.current;
-    pendingStartRef.current = null;
-    if (startAt != null && startAt > 0 && Number.isFinite(audio.duration)) {
-      // Clamp so a stale position at/past the end restarts cleanly.
-      audio.currentTime = Math.min(startAt, Math.max(0, audio.duration - 5));
-    }
-  }, []);
+  const handleLoadedMetadata = useCallback(
+    (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      const audio = e.currentTarget;
+      setDuration(audio.duration || 0);
+      // Apply the deferred resume offset now that seeking is possible.
+      const startAt = pendingStartRef.current;
+      pendingStartRef.current = null;
+      if (startAt != null) {
+        // Resume avoids a stale position at the end. Explicit search timestamps
+        // may legitimately be in the last five seconds (or exactly zero).
+        const max = Number.isFinite(audio.duration)
+          ? Math.max(0, audio.duration - (startAt.resume ? 5 : 0))
+          : startAt.time;
+        audio.currentTime = Math.min(startAt.time, max);
+        setTime(audio.currentTime);
+      }
+    },
+    [setTime],
+  );
 
   const handleEnded = useCallback(() => {
     setCurrent(null);
@@ -146,6 +186,7 @@ export function usePlayer() {
     audioRef,
     current,
     duration,
+    play,
     togglePlay,
     seek,
     subscribeToTime,

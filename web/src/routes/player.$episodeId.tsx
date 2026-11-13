@@ -14,8 +14,10 @@ import { usePlayer } from "../hooks/usePlayer";
 import { useScreenWakeLock } from "../hooks/useScreenWakeLock";
 import { kebabCase } from "../lib/kebab";
 import { podcastImageUrl } from "../lib/podcastImage";
+import { parsePlayerSearch } from "../lib/playerNavigation";
 
 export const Route = createFileRoute("/player/$episodeId")({
+  validateSearch: parsePlayerSearch,
   loader: async ({ params: { episodeId } }) => {
     const res = await api.api.episodes[":id"].$get({ param: { id: episodeId } });
     const data = await res.json();
@@ -38,11 +40,21 @@ function EpisodePage() {
   // The loader result is the starting point; the hook polls until a
   // transcript exists.
   const initial = Route.useLoaderData();
+  const { t } = Route.useSearch();
   const { state, postError, starting, downloadTranscript } = useEpisodeTranscript(initial);
   const { podcast, episode, transcript, transcribeStatus, transcribeError } = state;
   const slug = kebabCase(podcast.title);
-  const { audioElement, audioRef, current, duration, togglePlay, seek, subscribeToTime, getTime } =
-    usePlayer();
+  const {
+    audioElement,
+    audioRef,
+    current,
+    duration,
+    play,
+    togglePlay,
+    seek,
+    subscribeToTime,
+    getTime,
+  } = usePlayer();
   const playing = current?.id === episode.id;
 
   // Supply lock-screen / system media controls with the active episode.
@@ -106,17 +118,14 @@ function EpisodePage() {
     void anki.syncAnki();
   }, [anki.syncAnki]);
 
-  // Autoplay on arrival: the navigation click counts as the user gesture.
-  // Keyed on the episode id rather than on `episode`, because a same-route
-  // param change (a "next episode" link) reuses this component: the router
-  // only remounts when `remountDeps` says so. `episode` is a fresh object on
-  // every loader revalidation, so keying on it would re-run the effect and
-  // pause mid-episode; keying on the id plays each episode once and — since
-  // togglePlay swaps the <audio> source — stops the previous one.
+  // Load once per episode/timestamp navigation, not on loader revalidation.
+  // Browsers may reject autoplay; the ordinary Play button remains available.
+  const episodeRef = useRef(episode);
+  episodeRef.current = episode;
   useEffect(() => {
-    togglePlay(episode);
-    // `episode` is read from this same render; only its id is the trigger.
-  }, [episode.id, togglePlay]);
+    play(episodeRef.current, t);
+    resumeFollowRef.current?.();
+  }, [episode.id, t, play]);
 
   // Stacked on narrow screens (compact header → transcript → player bar)
   // so the transcript and player bar stay reachable one-handed; the

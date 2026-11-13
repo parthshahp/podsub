@@ -80,6 +80,13 @@ export function segmentLines(
 const lineCache = new Map<string, SegmentedLine[]>();
 const CACHE_LIMIT = 20;
 
+/** Rewrites can happen within the same SQLite timestamp second. */
+export function invalidateSegmentedLines(episodeId: string) {
+  for (const key of lineCache.keys()) {
+    if (key.startsWith(`${episodeId}:`)) lineCache.delete(key);
+  }
+}
+
 export function getSegmentedLines(
   episodeId: string,
   updatedAt: number,

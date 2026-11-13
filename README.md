@@ -24,6 +24,30 @@ pronunciation dictionary loads locally on the first Latin-letter search and
 aliases are cached; no AI or external search service is used. Initials and episode
 title pinyin search are not included.
 
+## Transcript search
+
+Open **Search** to find a literal word or phrase across saved transcripts, optionally
+scoped to one podcast. Results highlight every match in a passage and link to the
+player near the first matching word. Played/archived episodes are included. Search
+works with even one-character Chinese queries and ignores letter case; pinyin,
+fuzzy matching, simplified/traditional conversion, and phrases spanning separate
+transcript passages are not included.
+
+Search stays in SQLite: a small derived passage table reuses the original word
+timestamps, without a separate search service, full-text index, or generated audio
+clips. Existing transcripts are backfilled on server startup; transcription writes
+replace the affected episode's search rows atomically. Only the latest transcript
+version shown by the player is searchable. To rebuild the derived data manually:
+
+```
+pnpm --filter @podsub/server rebuild:search
+```
+
+Player links accept `?t=123.4` (seconds), overriding the saved resume position.
+Browsers that block autoplay require pressing Play. Audio retention is unchanged:
+an evicted audio file is streamed from the original host, so a searchable transcript
+does not guarantee the audio will remain available upstream.
+
 ## Prerequisites
 
 - Node.js + `pnpm`

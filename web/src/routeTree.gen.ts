@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EpisodesRouteImport } from './routes/episodes'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SlugIdRouteImport } from './routes/$slug/$id'
 import { Route as PlayerEpisodeIdRouteImport } from './routes/player.$episodeId'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const EpisodesRoute = EpisodesRouteImport.update({
   id: '/episodes',
   path: '/episodes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -44,6 +50,7 @@ const PlayerEpisodeIdRoute = PlayerEpisodeIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/episodes': typeof EpisodesRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/$slug/$id': typeof SlugIdRoute
   '/player/$episodeId': typeof PlayerEpisodeIdRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/episodes': typeof EpisodesRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/$slug/$id': typeof SlugIdRoute
   '/player/$episodeId': typeof PlayerEpisodeIdRoute
@@ -59,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/episodes': typeof EpisodesRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/$slug/$id': typeof SlugIdRoute
   '/player/$episodeId': typeof PlayerEpisodeIdRoute
@@ -66,13 +75,25 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/episodes' | '/settings' | '/$slug/$id' | '/player/$episodeId'
+    | '/'
+    | '/episodes'
+    | '/search'
+    | '/settings'
+    | '/$slug/$id'
+    | '/player/$episodeId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/episodes' | '/settings' | '/$slug/$id' | '/player/$episodeId'
+  to:
+    | '/'
+    | '/episodes'
+    | '/search'
+    | '/settings'
+    | '/$slug/$id'
+    | '/player/$episodeId'
   id:
     | '__root__'
     | '/'
     | '/episodes'
+    | '/search'
     | '/settings'
     | '/$slug/$id'
     | '/player/$episodeId'
@@ -81,6 +102,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EpisodesRoute: typeof EpisodesRoute
+  SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SlugIdRoute: typeof SlugIdRoute
   PlayerEpisodeIdRoute: typeof PlayerEpisodeIdRoute
@@ -100,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/episodes'
       fullPath: '/episodes'
       preLoaderRoute: typeof EpisodesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -129,6 +158,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EpisodesRoute: EpisodesRoute,
+  SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SlugIdRoute: SlugIdRoute,
   PlayerEpisodeIdRoute: PlayerEpisodeIdRoute,

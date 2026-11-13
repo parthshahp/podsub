@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { CHUNK_DELAY_MS, CHUNK_SECONDS, MAX_LINE_SECONDS, MODEL } from "../config.js";
+import { CHUNK_DELAY_MS, CHUNK_SECONDS, MODEL } from "../config.js";
 import {
   audioFileFor,
   ensurePodcastsDir,
@@ -22,39 +22,8 @@ const execFileP = promisify(execFile);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 import type { Word, Transcript } from "@podsub/schemas";
-
-// Consecutive Han/Kana/Hangul words must not get spaces inserted between them.
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
-// Punctuation hugs the preceding word; straight quotes are ambiguous and left out.
-const NO_SPACE_BEFORE = /^[,.;:!?%)\]}'”’、。，！？：；…]/;
-// Unambiguous openers hug the following word.
-const NO_SPACE_AFTER = /[([{'“‘（「『]$/;
-
-/** Join one ASR word into the accumulating line text, spacing Latin runs only. */
-export function appendWordToLine(text: string, word: string): string {
-  if (!text) return word;
-  if (/^\s/.test(word) || /\s$/.test(text)) return text + word;
-  if (NO_SPACE_BEFORE.test(word)) return text + word;
-  if (NO_SPACE_AFTER.test(text)) return text + word;
-  if (CJK.test(text.at(-1) ?? "") && CJK.test(word[0] ?? "")) return text + word;
-  return text + " " + word;
-}
-
-export function groupWordsIntoLines(words: Word[]): { start: number; text: string }[] {
-  const lines: { start: number; text: string }[] = [];
-  let text = "";
-  let lineStart = 0;
-  for (const w of words) {
-    if (!text) lineStart = w.start;
-    text = appendWordToLine(text, w.word);
-    if (/[。！？！？.!?]/.test(w.word) || w.end - lineStart > MAX_LINE_SECONDS) {
-      lines.push({ start: lineStart, text });
-      text = "";
-    }
-  }
-  if (text) lines.push({ start: lineStart, text });
-  return lines;
-}
+import { groupWordsIntoLines } from "../lib/transcript-text.js";
+export { appendWordToLine, groupWordsIntoLines } from "../lib/transcript-text.js";
 
 // 500 MB caps disk use; the timeout applies to response headers only.
 const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
@@ -145,7 +114,10 @@ async function chunkAudio(file: string, dir: string): Promise<string[]> {
 }
 
 /** Download (cached) → chunk with ffmpeg → transcribe via OpenRouter → persist. */
-export async function transcribeEpisode(episode: EpisodeRow, model: string = MODEL): Promise<Transcript> {
+export async function transcribeEpisode(
+  episode: EpisodeRow,
+  model: string = MODEL,
+): Promise<Transcript> {
   // Hold the cache file so eviction can't delete it mid-pipeline.
   retainAudio(episode.id);
   try {

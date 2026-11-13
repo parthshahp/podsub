@@ -50,6 +50,11 @@ export function createHarness(script, bindings, select, args = {}) {
     if (changed(slots[i]?.deps, deps)) slots[i] = { value: callback, deps };
     return slots[i].value;
   };
+  const useMemo = (factory, deps) => {
+    const i = index++;
+    if (changed(slots[i]?.deps, deps)) slots[i] = { value: factory(), deps };
+    return slots[i].value;
+  };
   const useEffect = (effect, deps) => {
     const i = index++;
     if (changed(slots[i]?.deps, deps)) {
@@ -66,6 +71,7 @@ export function createHarness(script, bindings, select, args = {}) {
     useState,
     useRef,
     useCallback,
+    useMemo,
     useEffect,
     setTimeout: (callback, ms) => {
       const id = ++nextTimer;

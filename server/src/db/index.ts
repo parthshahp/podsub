@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { createTranscriptSearch } from "./transcript-search.js";
 
 // Anchor to server/src/db/ so paths are cwd-independent.
 const ROOT = path.resolve(import.meta.dirname, "../..");
@@ -48,3 +49,6 @@ function migrate(database: Database.Database) {
 }
 
 migrate(db);
+
+export const transcriptSearch = createTranscriptSearch(db);
+transcriptSearch.backfill();

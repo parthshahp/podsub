@@ -167,6 +167,34 @@ export const EpisodeListSchema = z.object({
   offset: z.number().int(),
 });
 
+export const SearchTranscriptsQuerySchema = z.object({
+  q: z.string().trim().max(200).default(""),
+  podcastId: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  offset: z.coerce.number().int().min(0).max(100000).default(0),
+});
+
+export const TranscriptSearchResultSchema = z.object({
+  episodeId: z.string(),
+  episodeTitle: z.string(),
+  podcastId: z.string(),
+  podcastTitle: z.string(),
+  passageNumber: z.number().int().min(0),
+  startSec: z.number(),
+  endSec: z.number(),
+  matchSec: z.number(),
+  text: z.string(),
+  /** UTF-16 offsets in text; render as text/mark elements, never HTML. */
+  highlights: z.array(z.object({ start: z.number().int(), end: z.number().int() })),
+});
+
+export const TranscriptSearchSchema = z.object({
+  results: z.array(TranscriptSearchResultSchema),
+  total: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
+});
+
 /** GET /api/podcasts/:id — podcast info plus its first page of episodes. */
 export const PodcastDetailSchema = z.object({
   podcast: PodcastSchema,
@@ -246,6 +274,9 @@ export type ArchiveEpisodeInput = z.infer<typeof ArchiveEpisodeInputSchema>;
 export type UpdatePlaybackInput = z.infer<typeof UpdatePlaybackInputSchema>;
 export type ListEpisodesQuery = z.infer<typeof ListEpisodesQuerySchema>;
 export type EpisodeList = z.infer<typeof EpisodeListSchema>;
+export type SearchTranscriptsQuery = z.infer<typeof SearchTranscriptsQuerySchema>;
+export type TranscriptSearchResult = z.infer<typeof TranscriptSearchResultSchema>;
+export type TranscriptSearch = z.infer<typeof TranscriptSearchSchema>;
 export type PodcastDetail = z.infer<typeof PodcastDetailSchema>;
 export type CreatePodcastInput = z.infer<typeof CreatePodcastInputSchema>;
 export type AnkiAction = (typeof ANKI_ACTIONS)[number];

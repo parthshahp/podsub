@@ -1,6 +1,6 @@
-import { db } from "./index.js";
-import { appendWordToLine, groupWordsIntoLines } from "../transcription/index.js";
-import { getSegmentedLines } from "../transcription/segment.js";
+import { db, transcriptSearch } from "./index.js";
+import { appendWordToLine, groupWordsIntoLines } from "../lib/transcript-text.js";
+import { getSegmentedLines, invalidateSegmentedLines } from "../transcription/segment.js";
 import type {
   Episode,
   EpisodeListItem,
@@ -201,7 +201,7 @@ const getEpisodeStmt = db.prepare(`
 const getTranscriptStmt = db.prepare(`
   SELECT model, language, segments, updated_at FROM transcript
   WHERE episode_id = ? AND segments IS NOT NULL
-  ORDER BY updated_at DESC
+  ORDER BY updated_at DESC, rowid DESC
   LIMIT 1
 `);
 
@@ -423,14 +423,19 @@ export function saveTranscript(
   const segments = JSON.stringify(
     words.map((w) => ({ start: w.start, end: w.end, speaker: null, text: w.word })),
   );
-  const row = upsertTranscriptStmt.get({
-    id: crypto.randomUUID(),
-    episode_id: episodeId,
-    model,
-    language,
-    full_text: words.reduce((text, w) => appendWordToLine(text, w.word), ""),
-    segments,
-  }) as { updated_at: number };
+  const row = db.transaction(() => {
+    const saved = upsertTranscriptStmt.get({
+      id: crypto.randomUUID(),
+      episode_id: episodeId,
+      model,
+      language,
+      full_text: words.reduce((text, w) => appendWordToLine(text, w.word), ""),
+      segments,
+    }) as { updated_at: number };
+    transcriptSearch.replaceEpisode(episodeId);
+    return saved;
+  })();
+  invalidateSegmentedLines(episodeId);
   return new Date(row.updated_at * 1000).toISOString();
 }
 

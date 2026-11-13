@@ -2,7 +2,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
-import { GearIcon, ListIcon, SyncIcon } from "./icons";
+import { GearIcon, ListIcon, SearchIcon, SyncIcon } from "./icons";
 
 function SyncButton() {
   const [syncing, setSyncing] = useState(false);
@@ -97,6 +97,15 @@ export default function NavBar({ showMobileLinks = true }: { showMobileLinks?: b
       <nav className="ml-auto flex items-center gap-2">
         <SyncButton />
         <span className={showMobileLinks ? "contents" : "hidden md:contents"}>
+          <Link
+            to="/search"
+            search={{ q: "", podcastId: "", page: 0 }}
+            className="btn btn-ghost btn-circle btn-sm"
+            aria-label="Search transcripts"
+            title="Search transcripts"
+          >
+            <SearchIcon className="h-5 w-5" />
+          </Link>
           <Link
             to="/episodes"
             className="btn btn-ghost btn-circle btn-sm"

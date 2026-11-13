@@ -1,10 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { GearIcon, ListIcon } from "./icons";
+import { GearIcon, ListIcon, SearchIcon } from "./icons";
 
 /** Compact 48px tabs keep 44px touch targets; the safe area is added below. */
 export default function BottomNav() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const library = pathname !== "/episodes" && pathname !== "/settings";
+  const library = pathname !== "/episodes" && pathname !== "/settings" && pathname !== "/search";
   const items = [
     { to: "/" as const, label: "Library", active: library, icon: <LibraryIcon /> },
     {
@@ -12,6 +12,12 @@ export default function BottomNav() {
       label: "Episodes",
       active: pathname === "/episodes",
       icon: <ListIcon className="h-5 w-5" />,
+    },
+    {
+      to: "/search" as const,
+      label: "Search",
+      active: pathname === "/search",
+      icon: <SearchIcon className="h-5 w-5" />,
     },
     {
       to: "/settings" as const,
@@ -24,12 +30,13 @@ export default function BottomNav() {
     <nav
       id="app-tabs"
       aria-label="Main navigation"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-base-300 bg-base-100 pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-base-300 bg-base-100 pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] md:hidden"
     >
       {items.map(({ to, label, active, icon }) => (
         <Link
           key={to}
           to={to}
+          search={to === "/search" ? { q: "", podcastId: "", page: 0 } : undefined}
           activeOptions={{ exact: true }}
           aria-current={active ? "page" : undefined}
           className={`flex min-h-12 flex-col items-center justify-center gap-0.5 text-xs font-medium ${active ? "text-primary" : "text-base-content/60"}`}

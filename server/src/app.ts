@@ -10,11 +10,14 @@ import { podcastRoutes } from "./routes/podcasts.js";
 import { episodeRoutes } from "./routes/episodes.js";
 import { createExplanationRoutes } from "./routes/explanations.js";
 import { getTranscript } from "./db/queries.js";
+import { transcriptSearch } from "./db/index.js";
+import { createSearchRoutes } from "./routes/search.js";
 
 const app = new Hono()
   .route("/api/podcasts", podcastRoutes)
   .route("/api/episodes", episodeRoutes)
   .route("/api/episodes", createExplanationRoutes(getTranscript))
+  .route("/api/search", createSearchRoutes(transcriptSearch.search))
   .route("/api/anki", ankiRoutes);
 
 // Serve the built SPA (web/dist) when present. In dev the Vite server owns
