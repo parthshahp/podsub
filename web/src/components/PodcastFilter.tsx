@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { PodcastFilter as PodcastFilterValue } from "../hooks/useEpisodeList";
+import { usePodcastSearch } from "../hooks/usePodcastSearch";
 
 type Props = {
   podcasts: { id: string; title: string }[];
@@ -11,9 +12,7 @@ type Props = {
 export default function PodcastFilter({ podcasts, value, onChange }: Props) {
   const [query, setQuery] = useState("");
   const selected = new Set(value.ids);
-  const visible = podcasts.filter((podcast) =>
-    podcast.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
-  );
+  const { podcasts: visible, searching, error } = usePodcastSearch(podcasts, query);
   const active = selected.size > 0;
 
   return (
@@ -65,12 +64,22 @@ export default function PodcastFilter({ podcasts, value, onChange }: Props) {
         <input
           type="search"
           aria-label="Find podcasts to filter"
-          placeholder="Find podcasts…"
+          aria-busy={searching}
+          placeholder="Find podcasts by name or pinyin…"
           className="input input-sm mt-3 w-full text-base sm:text-sm"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <fieldset className="mt-2 max-h-64 overflow-y-auto overscroll-contain">
+        <p
+          role="status"
+          className={searching || error ? "mt-2 text-xs text-base-content/60" : "sr-only"}
+        >
+          {searching ? "Loading pinyin search…" : error}
+        </p>
+        <fieldset
+          aria-busy={searching}
+          className="mt-2 max-h-64 overflow-y-auto overscroll-contain"
+        >
           <legend className="sr-only">
             Podcasts to {value.mode === "include" ? "include" : "exclude"}
           </legend>
@@ -95,7 +104,7 @@ export default function PodcastFilter({ podcasts, value, onChange }: Props) {
               <span className="min-w-0 text-sm break-words">{podcast.title}</span>
             </label>
           ))}
-          {visible.length === 0 && (
+          {visible.length === 0 && !searching && !error && (
             <p className="px-2 py-3 text-sm text-base-content/60">No podcasts found.</p>
           )}
         </fieldset>

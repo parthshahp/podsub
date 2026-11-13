@@ -12,9 +12,11 @@ type Props = {
   filteredPodcasts: PodcastList[];
   q: string | undefined;
   sort: PodcastSort;
+  searching: boolean;
+  searchError: string | null;
 };
 
-export default function PodcastList({ filteredPodcasts, q, sort }: Props) {
+export default function PodcastList({ filteredPodcasts, q, sort, searching, searchError }: Props) {
   const navigate = useNavigate({ from: "/" });
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -33,8 +35,9 @@ export default function PodcastList({ filteredPodcasts, q, sort }: Props) {
           <SearchIcon className="h-4 w-4 shrink-0 text-base-content/40" />
           <input
             type="search"
-            placeholder="Filter podcasts…"
+            placeholder="Filter by name or pinyin…"
             aria-label="Filter podcasts"
+            aria-busy={searching}
             value={q ?? ""}
             onChange={(e) => {
               navigate({
@@ -71,8 +74,18 @@ export default function PodcastList({ filteredPodcasts, q, sort }: Props) {
         </label>
       </div>
 
+      <p
+        role="status"
+        className={searching || searchError ? "mb-3 text-sm text-base-content/60" : "sr-only"}
+      >
+        {searching ? "Loading pinyin search…" : searchError}
+      </p>
+
       {filteredPodcasts.length > 0 ? (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-6 gap-y-8">
+        <ul
+          aria-busy={searching}
+          className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-6 gap-y-8"
+        >
           {filteredPodcasts.map((p) => (
             <li key={p.id}>
               <Link
@@ -107,7 +120,7 @@ export default function PodcastList({ filteredPodcasts, q, sort }: Props) {
             </li>
           ))}
         </ul>
-      ) : (
+      ) : !searching && !searchError ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center">
           <p className="font-medium">No podcasts found</p>
           <p className="text-sm text-base-content/60">
@@ -116,7 +129,7 @@ export default function PodcastList({ filteredPodcasts, q, sort }: Props) {
               : "Paste an RSS feed above to add your first podcast."}
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

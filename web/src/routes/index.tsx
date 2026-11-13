@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { api } from "../api";
 import PageShell, { pageLoadState } from "../components/PageShell";
 import PodcastList from "../components/PodcastList";
+import { usePodcastSearch } from "../hooks/usePodcastSearch";
 import { isPodcastSort, sortPodcasts } from "../lib/sortPodcasts";
 
 // List, pending state and error state share one shell so the scroll container
@@ -28,16 +29,17 @@ export const Route = createFileRoute("/")({
 function PodcastsPage() {
   const { podcasts } = Route.useLoaderData();
   const { q, sort = "added" } = Route.useSearch();
-  const filtered = useMemo(() => {
-    const needle = q?.trim().toLowerCase();
-    const matching = needle
-      ? podcasts.filter((p) => p.title.toLowerCase().includes(needle))
-      : podcasts;
-    return sortPodcasts(matching, sort);
-  }, [podcasts, q, sort]);
+  const search = usePodcastSearch(podcasts, q);
+  const filtered = useMemo(() => sortPodcasts(search.podcasts, sort), [search.podcasts, sort]);
   return (
     <PageShell className={LIST_SHELL}>
-      <PodcastList filteredPodcasts={filtered} q={q} sort={sort} />
+      <PodcastList
+        filteredPodcasts={filtered}
+        q={q}
+        sort={sort}
+        searching={search.searching}
+        searchError={search.error}
+      />
     </PageShell>
   );
 }

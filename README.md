@@ -16,6 +16,14 @@ selected line and its immediate neighbors are sent on demand, and repeated
 explanations are cached in memory (up to 200 entries, cleared on server restart).
 Timestamp seeking and dictionary word lookups continue to work as before.
 
+Podcast search and the episode-list podcast picker accept Chinese titles or full
+pinyin: `gushi`, `gu shi`, and `gù shì` all find `故事`. Matching ignores case,
+spacing, punctuation, and tone marks; use `ü` or `v` for the ü vowel. Simplified and
+traditional titles are supported, including mixed Chinese/English names. The
+pronunciation dictionary loads locally on the first Latin-letter search and
+aliases are cached; no AI or external search service is used. Initials and episode
+title pinyin search are not included.
+
 ## Prerequisites
 
 - Node.js + `pnpm`
