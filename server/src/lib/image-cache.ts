@@ -1,30 +1,34 @@
 import type Database from "better-sqlite3";
+import sharp from "sharp";
 
 import { readBodyCapped, safeFetch } from "./safe-fetch.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_ENCODING_VERSION = 1;
 
 type CachedImage = { contentType: string; data: Buffer };
+type StoredImage = CachedImage & { encodingVersion: number };
 
-/** Persistent originals: no expiry or upstream request once an image is saved. */
+/** Persistent, optimized artwork shared by thumbnails and card exports. */
 export function createImageCache(database: Database.Database, fetchImage = safeFetch) {
-  const read = database.prepare<[string, string], CachedImage>(`
-    SELECT content_type AS contentType, data FROM podcast_image
+  const read = database.prepare<[string, string], StoredImage>(`
+    SELECT content_type AS contentType, data, encoding_version AS encodingVersion FROM podcast_image
     WHERE podcast_id = ? AND image_url = ?
   `);
   // A podcast can be deleted or its image URL can change during a download.
   // Only save if the image still belongs to the current podcast row.
   const save = database.prepare(`
-    INSERT INTO podcast_image (podcast_id, image_url, content_type, data)
-    SELECT id, image_url, ?, ? FROM podcast WHERE id = ? AND image_url = ?
+    INSERT INTO podcast_image (podcast_id, image_url, content_type, data, encoding_version)
+    SELECT id, image_url, ?, ?, ? FROM podcast WHERE id = ? AND image_url = ?
     ON CONFLICT(podcast_id) DO UPDATE SET
       image_url = excluded.image_url,
       content_type = excluded.content_type,
-      data = excluded.data
+      data = excluded.data,
+      encoding_version = excluded.encoding_version
   `);
   const inFlight = new Map<string, Promise<CachedImage>>();
 
-  async function download(podcastId: string, imageUrl: string): Promise<CachedImage> {
+  async function download(imageUrl: string): Promise<Buffer> {
     const upstream = await fetchImage(imageUrl);
     const contentType = upstream.headers.get("content-type") ?? "";
     if (!upstream.ok || !upstream.body || !contentType.startsWith("image/")) {
@@ -39,20 +43,39 @@ export function createImageCache(database: Database.Database, fetchImage = safeF
       throw err;
     }
     if (data.length === 0) throw new Error("Upstream image is empty");
-    save.run(contentType, data, podcastId, imageUrl);
+    return data;
+  }
+
+  async function load(
+    podcastId: string,
+    imageUrl: string,
+    cached?: StoredImage,
+  ): Promise<CachedImage> {
+    const source = cached?.data ?? (await download(imageUrl));
+    // Bound decoded pixels as well as downloaded bytes. Keep aspect ratio,
+    // honor EXIF orientation, strip metadata, and don't enlarge small covers.
+    const data = await sharp(source, { limitInputPixels: 25_000_000 })
+      .rotate()
+      .resize(1024, 1024, { fit: "inside", withoutEnlargement: true })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 80, progressive: true })
+      .toBuffer();
+    const contentType = "image/jpeg";
+    save.run(contentType, data, IMAGE_ENCODING_VERSION, podcastId, imageUrl);
     return { contentType, data };
   }
 
   return {
     async get(podcastId: string, imageUrl: string): Promise<CachedImage> {
-      const cached = read.get(podcastId, imageUrl);
-      if (cached) return cached;
-
-      // Thumbnail and original requests often arrive together on a cold cache.
+      // Also deduplicate local upgrades of previously saved originals.
       const key = JSON.stringify([podcastId, imageUrl]);
       let pending = inFlight.get(key);
       if (!pending) {
-        pending = download(podcastId, imageUrl);
+        const cached = read.get(podcastId, imageUrl);
+        if (cached?.encodingVersion === IMAGE_ENCODING_VERSION) {
+          return { contentType: cached.contentType, data: cached.data };
+        }
+        pending = load(podcastId, imageUrl, cached);
         inFlight.set(key, pending);
       }
       try {

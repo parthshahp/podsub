@@ -70,11 +70,13 @@ process is all you need — expose it on your LAN directly or put a reverse
 proxy in front. Persist `server/data/` (SQLite) and `podcasts/` (audio
 cache) across restarts.
 
-Original podcast artwork is saved in SQLite on its first successful request.
-Thumbnails and Anki exports reuse that saved original, including after server
-restarts, without contacting the image host again. A changed artwork URL in the
-feed triggers a new download; deleting the podcast also deletes its saved image.
-Artwork downloads retain the 10 MB size cap and upstream URL safety checks.
+Podcast artwork is resized to fit within 1024 × 1024 (without upscaling), encoded
+as a quality-80 JPEG, and saved in SQLite on its first successful request.
+Thumbnails and Anki exports reuse that optimized image, including after server
+restarts, without contacting the image host again. Previously saved originals are
+optimized locally on their next use. A changed artwork URL in the feed triggers a
+new download; deleting the podcast also deletes its saved image. Downloads retain
+the 10 MB size cap and upstream URL safety checks; decoding is limited to 25 megapixels.
 
 ## Install as an app (PWA)
 

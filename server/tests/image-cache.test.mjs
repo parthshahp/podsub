@@ -22,6 +22,14 @@ const original = await sharp({
   .png()
   .toBuffer();
 const response = () => new Response(original, { headers: { "content-type": "image/png" } });
+const assertOptimized = async (image, width = 32, height = 32) => {
+  assert.equal(image.contentType, "image/jpeg");
+  const metadata = await sharp(image.data).metadata();
+  assert.equal(metadata.format, "jpeg");
+  assert.equal(metadata.width, width);
+  assert.equal(metadata.height, height);
+  assert.equal(metadata.exif, undefined);
+};
 const insertPodcast = (db) =>
   db
     .prepare("INSERT INTO podcast (id, feed_url, title, image_url) VALUES (?, ?, ?, ?)")
@@ -50,7 +58,7 @@ beforeEach(() => {
 
 afterEach(() => database.close());
 
-test("thumbnail generation saves the same original later used for card exports", async () => {
+test("thumbnails and card exports share optimized artwork without upscaling", async () => {
   const image = await cache.get("podcast", imageUrl);
   const thumbnail = await sharp(image.data).resize(96, 96).jpeg().toBuffer();
   assert.equal((await sharp(thumbnail).metadata()).format, "jpeg");
@@ -58,8 +66,8 @@ test("thumbnail generation saves the same original later used for card exports",
     throw new Error("Image host is offline");
   };
   const exported = await cache.get("podcast", imageUrl);
-  assert.equal(exported.contentType, "image/png");
-  assert.deepEqual(exported.data, original);
+  await assertOptimized(exported);
+  assert.deepEqual(exported.data, image.data);
   assert.deepEqual(calls, [imageUrl]);
 });
 
@@ -71,13 +79,15 @@ test("artwork survives closing and reopening the server database", async () => {
     disk = openDatabase(filename);
     for (const migration of migrations) disk.exec(migration);
     insertPodcast(disk);
-    await createImageCache(disk, async () => response()).get("podcast", imageUrl);
+    const saved = await createImageCache(disk, async () => response()).get("podcast", imageUrl);
     disk.close();
     disk = openDatabase(filename);
     const restartedCache = createImageCache(disk, async () => {
       assert.fail("Persisted artwork must not require the image host");
     });
-    assert.deepEqual((await restartedCache.get("podcast", imageUrl)).data, original);
+    const restored = await restartedCache.get("podcast", imageUrl);
+    await assertOptimized(restored);
+    assert.deepEqual(restored.data, saved.data);
   } finally {
     if (disk?.open) disk.close();
     await rm(directory, { recursive: true, force: true });
@@ -98,12 +108,15 @@ test("deduplicates concurrent thumbnail and export downloads", async () => {
 test("a changed artwork URL downloads a replacement instead of returning stale bytes", async () => {
   await cache.get("podcast", imageUrl);
   const changedUrl = "https://images.example.com/new-cover.webp";
-  const changedImage = await sharp(original).webp().toBuffer();
+  const changedImage = await sharp({
+    create: { width: 64, height: 32, channels: 3, background: "blue" },
+  })
+    .webp()
+    .toBuffer();
   database.prepare("UPDATE podcast SET image_url = ? WHERE id = ?").run(changedUrl, "podcast");
   reply = () => new Response(changedImage, { headers: { "content-type": "image/webp" } });
   const changed = await cache.get("podcast", changedUrl);
-  assert.equal(changed.contentType, "image/webp");
-  assert.deepEqual(changed.data, changedImage);
+  await assertOptimized(changed, 64, 32);
   assert.deepEqual(calls, [imageUrl, changedUrl]);
   assert.equal(database.prepare("SELECT count(*) AS count FROM podcast_image").get().count, 1);
   assert.equal(database.prepare("SELECT image_url FROM podcast_image").get().image_url, changedUrl);
@@ -115,6 +128,7 @@ test("failed downloads are not cached and can be retried", async () => {
     () => new Response("not an image", { headers: { "content-type": "text/html" } }),
     () => new Response(null, { headers: { "content-type": "image/png" } }),
     () => new Response(new Uint8Array(), { headers: { "content-type": "image/png" } }),
+    () => new Response("invalid image bytes", { headers: { "content-type": "image/png" } }),
     () => {
       throw new DOMException("Timed out", "TimeoutError");
     },
@@ -124,7 +138,7 @@ test("failed downloads are not cached and can be retried", async () => {
     assert.equal(database.prepare("SELECT count(*) AS count FROM podcast_image").get().count, 0);
   }
   reply = response;
-  assert.deepEqual((await cache.get("podcast", imageUrl)).data, original);
+  await assertOptimized(await cache.get("podcast", imageUrl));
 });
 
 test("rejects oversized declared and streamed images without caching partial data", async () => {
@@ -149,7 +163,7 @@ test("rejects oversized declared and streamed images without caching partial dat
   await cache.get("podcast", imageUrl);
 });
 
-test("interrupted bodies never leave a partial cached original", async () => {
+test("interrupted bodies never leave a partial cached image", async () => {
   reply = () =>
     new Response(
       new ReadableStream({
@@ -165,7 +179,7 @@ test("interrupted bodies never leave a partial cached original", async () => {
   await assert.rejects(cache.get("podcast", imageUrl), /Connection interrupted/);
   assert.equal(database.prepare("SELECT count(*) AS count FROM podcast_image").get().count, 0);
   reply = response;
-  assert.deepEqual((await cache.get("podcast", imageUrl)).data, original);
+  await assertOptimized(await cache.get("podcast", imageUrl));
 });
 
 test("deleting a podcast cascades to its saved artwork", async () => {
@@ -200,5 +214,83 @@ test("a late old-URL download cannot overwrite the current artwork", async () =>
 test("uncached artwork still uses SSRF-safe fetching", async () => {
   const safeCache = createImageCache(database);
   await assert.rejects(safeCache.get("podcast", "http://127.0.0.1/artwork.png"), /Blocked/);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM podcast_image").get().count, 0);
+});
+
+test("large landscape and portrait covers fit within 1024px and keep their aspect ratio", async () => {
+  for (const [width, height, expectedWidth, expectedHeight] of [
+    [2400, 1200, 1024, 512],
+    [1200, 2400, 512, 1024],
+  ]) {
+    database.prepare("DELETE FROM podcast_image").run();
+    const large = await sharp({
+      create: { width, height, channels: 3, background: "blue" },
+    })
+      .png()
+      .toBuffer();
+    reply = () => new Response(large, { headers: { "content-type": "image/png" } });
+    const image = await cache.get("podcast", imageUrl);
+    await assertOptimized(image, expectedWidth, expectedHeight);
+    assert.ok(image.data.length < large.length);
+    assert.deepEqual(database.prepare("SELECT data FROM podcast_image").get().data, image.data);
+  }
+});
+
+test("honors EXIF orientation and strips the original metadata", async () => {
+  const rotated = await sharp({
+    create: { width: 64, height: 32, channels: 3, background: "red" },
+  })
+    .jpeg()
+    .withMetadata({ orientation: 6 })
+    .toBuffer();
+  reply = () => new Response(rotated, { headers: { "content-type": "image/jpeg" } });
+  await assertOptimized(await cache.get("podcast", imageUrl), 32, 64);
+});
+
+test("transparent artwork gets a white background in JPEG exports", async () => {
+  const transparent = await sharp({
+    create: { width: 32, height: 32, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .png()
+    .toBuffer();
+  reply = () => new Response(transparent, { headers: { "content-type": "image/png" } });
+  const image = await cache.get("podcast", imageUrl);
+  await assertOptimized(image);
+  const { data } = await sharp(image.data).raw().toBuffer({ resolveWithObject: true });
+  assert.deepEqual([...data.subarray(0, 3)], [255, 255, 255]);
+});
+
+test("upgrades legacy originals locally and saves only the optimized version", async () => {
+  database
+    .prepare(
+      "INSERT INTO podcast_image (podcast_id, image_url, content_type, data) VALUES (?, ?, ?, ?)",
+    )
+    .run("podcast", imageUrl, "image/png", original);
+  reply = () => {
+    assert.fail("Legacy artwork must be optimized without contacting the image host");
+  };
+  const [first, second] = await Promise.all([
+    cache.get("podcast", imageUrl),
+    cache.get("podcast", imageUrl),
+  ]);
+  await assertOptimized(first);
+  assert.deepEqual(second.data, first.data);
+  const saved = database.prepare("SELECT * FROM podcast_image").get();
+  assert.equal(saved.content_type, "image/jpeg");
+  assert.equal(saved.encoding_version, 1);
+  assert.deepEqual(saved.data, first.data);
+  assert.deepEqual((await cache.get("podcast", imageUrl)).data, first.data);
+  assert.deepEqual(calls, []);
+});
+
+test("rejects images over the decoded pixel limit without saving them", async () => {
+  const oversized = await sharp({
+    create: { width: 5001, height: 5000, channels: 3, background: "red" },
+  })
+    .png()
+    .toBuffer();
+  assert.ok(oversized.length < 10 * 1024 * 1024);
+  reply = () => new Response(oversized, { headers: { "content-type": "image/png" } });
+  await assert.rejects(cache.get("podcast", imageUrl), /pixel limit/);
   assert.equal(database.prepare("SELECT count(*) AS count FROM podcast_image").get().count, 0);
 });
