@@ -11,14 +11,15 @@ import {
 } from "../db/queries.js";
 import { importFeed } from "../feeds/importer.js";
 import { isRefreshing, refreshAllFeeds } from "../feeds/refresher.js";
+import { db } from "../db/index.js";
 import { deleteCachedAudio } from "../lib/audio-cache.js";
+import { createImageCache } from "../lib/image-cache.js";
 import { CreatePodcastInputSchema } from "@podsub/schemas";
 import type { PodcastDetail } from "@podsub/schemas";
-import { cappedBodyStream, readBodyCapped, safeFetch } from "../lib/safe-fetch.js";
 import { getTranscribeStatus, deleteJob } from "../transcription/jobs.js";
 import { listEpisodesValidator } from "./episodes.js";
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const imageCache = createImageCache(db);
 
 // Thumbnail buckets the UI may request via ?size=. Fixed buckets (instead
 // of arbitrary widths) keep the resize cache bounded and prevent
@@ -111,9 +112,8 @@ export const podcastRoutes = new Hono()
     };
     return c.json(detail);
   })
-  // Hard-delete a podcast: episodes + transcripts cascade in SQLite.
-  // Cached artwork/audio and in-memory transcribe state are purged here
-  // since they live outside the DB.
+  // Hard-delete a podcast: episodes, transcripts, and original artwork cascade
+  // in SQLite. Thumbnails, audio, and transcribe state live outside the DB.
   .delete("/:id", async (c) => {
     const podcast = getPodcast(c.req.param("id"));
     if (!podcast) return c.json({ error: "Not found" }, 404);
@@ -137,9 +137,9 @@ export const podcastRoutes = new Hono()
   .get("/:id/image", async (c) => {
     // Artwork proxy: CDNs rarely send CORS headers, and feed-supplied
     // originals are 1400-3000px (hundreds of KB+). The UI requests
-    // ?size= to get a small progressive JPEG; the bare URL streams the
-    // original for Anki media. safeFetch blocks private networks per hop
-    // and the body is capped.
+    // ?size= to get a small progressive JPEG; the bare URL serves the original
+    // for Anki media. Both share an original saved in SQLite, so exports don't
+    // depend on the image host after the first successful fetch.
     const podcast = getPodcast(c.req.param("id"));
     if (!podcast?.image_url) return c.json({ error: "Not found" }, 404);
 
@@ -162,13 +162,8 @@ export const podcastRoutes = new Hono()
         });
       }
       try {
-        const upstream = await safeFetch(podcast.image_url);
-        const type = upstream.headers.get("content-type") ?? "";
-        if (!upstream.ok || !upstream.body || !type.startsWith("image/")) {
-          return c.json({ error: "Upstream image fetch failed" }, 502);
-        }
-        const original = await readBodyCapped(upstream, MAX_IMAGE_BYTES);
-        const thumb = await sharp(original)
+        const original = await imageCache.get(podcast.id, podcast.image_url);
+        const thumb = await sharp(original.data)
           .resize(size, size, { fit: "cover", position: "centre" })
           .jpeg({ quality: 72, progressive: true })
           .toBuffer();
@@ -187,14 +182,11 @@ export const podcastRoutes = new Hono()
     }
 
     try {
-      const upstream = await safeFetch(podcast.image_url);
-      const type = upstream.headers.get("content-type") ?? "";
-      if (!upstream.ok || !upstream.body || !type.startsWith("image/")) {
-        return c.json({ error: "Upstream image fetch failed" }, 502);
-      }
-      return new Response(cappedBodyStream(upstream, MAX_IMAGE_BYTES), {
+      const image = await imageCache.get(podcast.id, podcast.image_url);
+      return new Response(new Uint8Array(image.data), {
         headers: {
-          "content-type": type,
+          "content-type": image.contentType,
+          "content-length": String(image.data.byteLength),
           "cache-control": "public, max-age=86400",
         },
       });
