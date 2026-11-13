@@ -173,6 +173,7 @@ function SettingsPage() {
           </label>
           <select
             id="transcribe-model"
+            aria-describedby="transcribe-model-save-hint"
             value={transcribeModel}
             onChange={(e) => handleTranscribeModelChange(e.target.value)}
             className="select w-full"
@@ -183,6 +184,9 @@ function SettingsPage() {
               </option>
             ))}
           </select>
+          <p id="transcribe-model-save-hint" className="text-xs text-base-content/60">
+            Saved automatically on this device.
+          </p>
         </div>
       </section>
 
@@ -203,6 +207,7 @@ function SettingsPage() {
           </label>
           <select
             id="explanation-model"
+            aria-describedby="explanation-model-save-hint"
             value={explanationModel}
             onChange={(e) => {
               const model = ExplanationModelSchema.parse(e.target.value);
@@ -217,7 +222,9 @@ function SettingsPage() {
               </option>
             ))}
           </select>
-          <p className="text-xs text-base-content/60">Saved automatically on this device.</p>
+          <p id="explanation-model-save-hint" className="text-xs text-base-content/60">
+            Saved automatically on this device.
+          </p>
         </div>
       </section>
 
@@ -345,8 +352,11 @@ function SettingsPage() {
         </div>
 
         <button type="button" className="btn btn-primary" disabled={!canSave} onClick={handleSave}>
-          {justSaved ? "Saved ✓" : "Save settings"}
+          Save Anki Settings
         </button>
+        <p role="status" className="text-sm text-success">
+          {justSaved ? "Anki settings saved ✓" : ""}
+        </p>
         {connected && deck !== "" && noteType !== "" && !loadingFields && !hasMapping && (
           <p className="text-sm text-base-content/60">
             Map at least one field above to enable saving.

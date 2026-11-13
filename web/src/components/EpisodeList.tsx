@@ -35,6 +35,10 @@ type Props = {
   onToggleArchive: (e: EpisodeListItem) => void;
   /** Episode id with an archive request in flight (button disabled). */
   archivePendingId: string | null;
+  archiveUndo: EpisodeListItem | null;
+  undoingArchive: boolean;
+  onUndoArchive: () => void;
+  onDismissArchiveUndo: () => void;
   /** Start a transcription job for an episode without a transcript. */
   onDownloadTranscript: (e: EpisodeListItem) => void;
   /** Episode id with a transcribe request in flight (button disabled). */
@@ -105,6 +109,10 @@ export default function EpisodeList({
   onPlay,
   onToggleArchive,
   archivePendingId,
+  archiveUndo,
+  undoingArchive,
+  onUndoArchive,
+  onDismissArchiveUndo,
   onDownloadTranscript,
   transcriptPendingId,
   transcriptStartedIds,
@@ -126,7 +134,7 @@ export default function EpisodeList({
       : [{ key: "all", label: null, episodes }];
   return (
     <>
-      <div className="mt-10 flex items-center justify-between gap-3 border-b border-base-300 pb-3 sm:gap-6">
+      <div className="mt-10 flex items-center justify-between gap-3 border-b border-base-300 pb-3 focus-within:border-primary sm:gap-6">
         <div className="relative min-w-0 flex-1">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
           <input
@@ -136,7 +144,7 @@ export default function EpisodeList({
             aria-busy={searching}
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            className="w-full bg-transparent pl-8 text-base outline-none placeholder:text-base-content/40 sm:text-[15px]"
+            className="w-full bg-transparent pl-8 text-base placeholder:text-base-content/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:text-[15px]"
           />
           {searching && (
             <span
@@ -145,8 +153,13 @@ export default function EpisodeList({
             />
           )}
         </div>
-        <span className="shrink-0 text-xs font-medium tracking-wide text-base-content/60 uppercase">
-          {trimmed ? (
+        <span
+          role="status"
+          className="shrink-0 text-xs font-medium tracking-wide text-base-content/60 uppercase"
+        >
+          {searching ? (
+            "Searching…"
+          ) : trimmed ? (
             <>
               {total} match{total === 1 ? "" : "es"}
             </>
@@ -184,6 +197,30 @@ export default function EpisodeList({
         </div>
       )}
 
+      {archiveUndo && (
+        <div className="fixed inset-x-4 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] z-40 mx-auto flex max-w-xl flex-wrap items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-4 py-3 shadow-lg md:bottom-6">
+          <p role="status" className="min-w-0 flex-1 text-sm break-words">
+            Archived <span className="line-clamp-2 font-medium">“{archiveUndo.title}”</span>
+          </p>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary min-h-11"
+            onClick={onUndoArchive}
+            disabled={undoingArchive || archivePendingId !== null}
+          >
+            {undoingArchive ? "Restoring…" : "Undo"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost min-h-11"
+            onClick={onDismissArchiveUndo}
+            disabled={undoingArchive}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {groups.map((group) => (
         <div key={group.key} className={group.label ? "mt-8" : undefined}>
           {group.label && (
@@ -192,7 +229,7 @@ export default function EpisodeList({
               <span aria-hidden="true" className="h-px flex-1 bg-base-300" />
             </h2>
           )}
-          <ul className="divide-y divide-base-300">
+          <ul aria-busy={searching} className="divide-y divide-base-300">
             {group.episodes.map((e) => (
               <li
                 key={e.id}
@@ -237,7 +274,7 @@ export default function EpisodeList({
                         to="/player/$episodeId"
                         params={{ episodeId: e.id }}
                         data-episode-title={e.id}
-                        className="block truncate text-[15px] font-medium no-underline hover:underline"
+                        className="line-clamp-2 text-[15px] leading-snug font-medium break-words no-underline hover:underline"
                       >
                         {e.title}
                       </Link>
@@ -257,7 +294,7 @@ export default function EpisodeList({
                       to="/player/$episodeId"
                       params={{ episodeId: e.id }}
                       data-episode-title={e.id}
-                      className="block truncate text-[15px] font-medium no-underline hover:underline"
+                      className="line-clamp-2 text-[15px] leading-snug font-medium break-words no-underline hover:underline"
                     >
                       {e.title}
                     </Link>
@@ -337,7 +374,7 @@ export default function EpisodeList({
                 </div>
               </li>
             ))}
-            {episodes.length === 0 && (
+            {episodes.length === 0 && !searching && !loadError && (
               <li className="py-6 text-sm text-base-content/60">
                 {trimmed
                   ? `No episodes match “${trimmed}”.`
@@ -350,7 +387,7 @@ export default function EpisodeList({
         </div>
       ))}
 
-      {hasMore && (
+      {hasMore && !searching && (
         <div className="mt-6 flex flex-col items-center gap-2">
           <button className="btn" onClick={onLoadMore} disabled={loadingMore}>
             {loadingMore && <span className="loading loading-spinner loading-sm" />}

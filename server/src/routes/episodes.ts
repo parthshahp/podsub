@@ -200,12 +200,18 @@ export const episodeRoutes = new Hono()
     return c.json(transcript);
   })
   // Archive (hide = mark played) or un-archive an episode. Archiving clears
-  // the saved resume position, so un-archiving starts from the beginning.
+  // the saved resume position; Undo can restore it in the same update.
   .patch(
     "/:id/archive",
     zValidator("json", ArchiveEpisodeInputSchema, (result, c) => {
       if (!result.success) {
-        return c.json({ error: "Expected body { archived: boolean }" }, 400);
+        return c.json(
+          {
+            error:
+              "Expected { archived: boolean, positionSec?: number } (position only when unarchiving)",
+          },
+          400,
+        );
       }
     }),
     (c) => {
@@ -213,16 +219,14 @@ export const episodeRoutes = new Hono()
       const row = getEpisodeWithPodcast(id);
       if (!row) return c.json({ error: "Not found" }, 404);
 
-      const { archived } = c.req.valid("json");
-      setEpisodeArchived(id, archived);
+      const { archived, positionSec } = c.req.valid("json");
+      setEpisodeArchived(id, archived, positionSec);
+      const updated = getEpisodeWithPodcast(id)!;
       const present = hasTranscript(id);
       return c.json(
         episodeFromRow(
           {
-            ...row.episode,
-            archived: archived ? 1 : 0,
-            // setEpisodeArchived pins position_sec to 0 on every toggle.
-            position_sec: 0,
+            ...updated.episode,
             has_transcript: present ? 1 : 0,
           },
           getTranscribeStatus(id),

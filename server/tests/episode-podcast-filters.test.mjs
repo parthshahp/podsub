@@ -4,7 +4,7 @@ import * as nodeModule from "node:module";
 import { test } from "node:test";
 import vm from "node:vm";
 import Database from "better-sqlite3";
-import { ListEpisodesQuerySchema } from "@podsub/schemas";
+import { ArchiveEpisodeInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
 
 // Evaluate the queries against an isolated in-memory database, never the library DB.
 const source = await readFile(new URL("../src/db/queries.ts", import.meta.url), "utf8");
@@ -23,8 +23,8 @@ const migrations = new URL("../data/migrations/", import.meta.url);
 for (const file of (await readdir(migrations)).filter((name) => name.endsWith(".sql")).sort()) {
   db.exec(await readFile(new URL(file, migrations), "utf8"));
 }
-const { listEpisodes, listPodcasts } = new vm.Script(
-  javascript + "\n({ listEpisodes, listPodcasts });",
+const { listEpisodes, listPodcasts, setEpisodeArchived, updateEpisodePlayback } = new vm.Script(
+  javascript + "\n({ listEpisodes, listPodcasts, setEpisodeArchived, updateEpisodePlayback });",
 ).runInNewContext({ db });
 
 db.exec(`
@@ -97,6 +97,50 @@ test("podcast summaries expose added date and latest publication across all epis
   const empty = podcasts.find((podcast) => podcast.id === "empty");
   assert.equal(empty.latestEpisodeAt, null);
   assert.equal(empty.createdAt, new Date(100000).toISOString());
+});
+
+test("archive Undo restores the saved position; normal unarchive still starts at zero", () => {
+  db.prepare(`INSERT INTO podcast_episode
+    (id, podcast_id, guid, title, audio_url, duration_sec, created_at, position_sec)
+    VALUES ('undo', 'a', 'undo', 'Undo episode', 'https://a.test/undo', 600, 1, 123.5)`).run();
+  const row = () =>
+    db.prepare("SELECT archived, position_sec FROM podcast_episode WHERE id = 'undo'").get();
+
+  assert.equal(setEpisodeArchived("undo", true), true);
+  assert.deepEqual(row(), { archived: 1, position_sec: 0 });
+  updateEpisodePlayback("undo", { positionSec: 140 });
+  assert.equal(row().position_sec, 0, "late playback saves cannot revive archived progress");
+  setEpisodeArchived("undo", false, 123.5);
+  assert.deepEqual(row(), { archived: 0, position_sec: 123.5 });
+  setEpisodeArchived("undo", true);
+  setEpisodeArchived("undo", false);
+  assert.deepEqual(row(), { archived: 0, position_sec: 0 });
+  setEpisodeArchived("undo", false, 900);
+  assert.equal(row().position_sec, 600, "restored positions are bounded by duration");
+  setEpisodeArchived("undo", false, 4);
+  assert.equal(row().position_sec, 0, "restoration respects the unplayed threshold");
+  setEpisodeArchived("undo", true, 100);
+  assert.deepEqual(row(), { archived: 1, position_sec: 0 });
+  assert.equal(setEpisodeArchived("missing", false, 10), false);
+});
+
+test("archive input validates Undo positions without breaking existing clients", () => {
+  assert.equal(ArchiveEpisodeInputSchema.safeParse({ archived: true }).success, true);
+  assert.equal(ArchiveEpisodeInputSchema.safeParse({ archived: false }).success, true);
+  assert.equal(
+    ArchiveEpisodeInputSchema.safeParse({ archived: false, positionSec: 123.5 }).success,
+    true,
+  );
+  for (const positionSec of [-1, 86401, Infinity, NaN, "123"]) {
+    assert.equal(
+      ArchiveEpisodeInputSchema.safeParse({ archived: false, positionSec }).success,
+      false,
+    );
+  }
+  assert.equal(
+    ArchiveEpisodeInputSchema.safeParse({ archived: true, positionSec: 10 }).success,
+    false,
+  );
 });
 
 test.after(() => db.close());

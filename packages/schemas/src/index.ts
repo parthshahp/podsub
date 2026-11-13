@@ -177,9 +177,15 @@ export const PodcastDetailSchema = z.object({
 });
 
 /** Body for PATCH /api/episodes/:id/archive — archive or un-archive. */
-export const ArchiveEpisodeInputSchema = z.object({
-  archived: z.boolean(),
-});
+export const ArchiveEpisodeInputSchema = z
+  .object({
+    archived: z.boolean(),
+    /** Restore the previous resume point when undoing an archive. */
+    positionSec: z.number().min(0).max(86400).optional(),
+  })
+  .refine((input) => !input.archived || input.positionSec === undefined, {
+    message: "A resume position can only be restored when unarchiving",
+  });
 
 /** Body for PATCH /api/episodes/:id/playback — save resume position and
  *  optionally backfill duration from the <audio> element's metadata. */

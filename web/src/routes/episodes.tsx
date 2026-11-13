@@ -54,6 +54,10 @@ function AllEpisodes() {
         onLoadMore={list.loadMore}
         onToggleArchive={list.toggleArchive}
         archivePendingId={list.archivePendingId}
+        archiveUndo={list.archiveUndo}
+        undoingArchive={list.undoingArchive}
+        onUndoArchive={list.undoArchive}
+        onDismissArchiveUndo={list.dismissArchiveUndo}
         onDownloadTranscript={list.downloadTranscript}
         transcriptPendingId={list.transcriptPendingId}
         transcriptStartedIds={list.transcriptStartedIds}

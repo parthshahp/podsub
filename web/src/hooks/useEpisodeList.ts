@@ -16,6 +16,15 @@ type Options = {
   podcastId?: string;
 };
 
+type PageRequest = {
+  limit: number;
+  offset: number;
+  q: string;
+  includeArchived: boolean;
+  hasTranscriptOnly: boolean;
+  inProgressOnly: boolean;
+};
+
 /** Shared state machine behind the podcast and all-episodes pages: debounced
  * server-side search, filter toggles, load-more pagination, and optimistic
  * archive / transcript actions, all against GET /api/episodes. */
@@ -28,7 +37,6 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const searching = query !== debouncedQuery;
   const trimmedSearch = debouncedQuery.trim();
   const isSearching = trimmedSearch !== "";
 
@@ -47,6 +55,14 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [archivePendingId, setArchivePendingId] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveUndo, setArchiveUndo] = useState<EpisodeListItem | null>(null);
+  const [undoingArchive, setUndoingArchive] = useState(false);
+  const archiveBusyRef = useRef(false);
+  const [archiveRevision, setArchiveRevision] = useState(0);
+  const undoRefreshSizes = useRef<{ browse: number | null; search: number | null }>({
+    browse: null,
+    search: null,
+  });
   const [transcriptPendingId, setTranscriptPendingId] = useState<string | null>(null);
   // Episodes queued for transcription this session (optimistic). The list
   // also carries the server queue state per episode (transcribeStatus), so
@@ -57,6 +73,19 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   // Search results replace the paged browse list.
   const [searchPage, setSearchPage] = useState<EpisodeListPage>({ episodes: [], total: 0 });
   const [searchError, setSearchError] = useState<string | null>(null);
+  const searchKey = JSON.stringify([
+    podcastId,
+    trimmedSearch,
+    showArchived,
+    hasTranscriptOnly,
+    inProgressOnly,
+    podcastFilter,
+    archiveRevision,
+  ]);
+  const [settledSearchKey, setSettledSearchKey] = useState<string | null>(null);
+  // Derive pending state from request identity so even the render before the
+  // effect starts cannot show an empty result as a completed search.
+  const searching = query !== debouncedQuery || (isSearching && settledSearchKey !== searchKey);
 
   const fetchPage = useCallback(
     async ({
@@ -66,14 +95,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
       includeArchived,
       hasTranscriptOnly,
       inProgressOnly,
-    }: {
-      limit: number;
-      offset: number;
-      q: string;
-      includeArchived: boolean;
-      hasTranscriptOnly: boolean;
-      inProgressOnly: boolean;
-    }): Promise<EpisodeListPage> => {
+    }: PageRequest): Promise<EpisodeListPage> => {
       const res = await api.api.episodes.$get({
         query: {
           limit: String(limit),
@@ -98,11 +120,27 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     [podcastId, podcastFilter],
   );
 
+  // Undo refreshes all loaded pages, not just page 0, so recovering a row
+  // deep in the list doesn't discard pagination or jump back to the top.
+  const fetchPages = useCallback(
+    async (
+      options: Omit<PageRequest, "limit" | "offset">,
+      count = PAGE_SIZE,
+    ): Promise<EpisodeListPage> => {
+      const pages = await Promise.all(
+        Array.from({ length: Math.max(1, Math.ceil(count / PAGE_SIZE)) }, (_, index) =>
+          fetchPage({ ...options, limit: PAGE_SIZE, offset: index * PAGE_SIZE }),
+        ),
+      );
+      return { episodes: pages.flatMap((page) => page.episodes), total: pages[0]!.total };
+    },
+    [fetchPage],
+  );
+
   // Reset pagination when the scope or search changes.
   useEffect(() => {
     setExtraPages([]);
     setLoadError(null);
-    setSearchPage({ episodes: [], total: 0 });
     setSearchError(null);
     setArchiveError(null);
   }, [podcastId, trimmedSearch]);
@@ -115,6 +153,7 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     setInProgressOnly(false);
     setTranscriptStartedIds(new Set());
     setTranscriptError(null);
+    setArchiveUndo(null);
   }, [podcastId]);
 
   // Skip the refetch on first mount — the loader already fetched page 0.
@@ -129,20 +168,26 @@ export function useEpisodeList({ initial, podcastId }: Options) {
       return;
     }
     let cancelled = false;
+    const restoreCount = undoRefreshSizes.current.browse;
+    undoRefreshSizes.current.browse = null;
     pageGeneration.current += 1;
-    setExtraPages([]);
+    if (restoreCount === null) setExtraPages([]);
     setLoadingMore(false);
     setLoadError(null);
-    fetchPage({
-      limit: PAGE_SIZE,
-      offset: 0,
-      q: "",
-      includeArchived: showArchived,
-      hasTranscriptOnly,
-      inProgressOnly,
-    })
+    fetchPages(
+      {
+        q: "",
+        includeArchived: showArchived,
+        hasTranscriptOnly,
+        inProgressOnly,
+      },
+      restoreCount ?? PAGE_SIZE,
+    )
       .then((page) => {
-        if (!cancelled) setPage0(page);
+        if (!cancelled) {
+          setPage0(page);
+          setExtraPages([]);
+        }
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
@@ -150,34 +195,49 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, showArchived, hasTranscriptOnly, inProgressOnly]);
+  }, [fetchPages, showArchived, hasTranscriptOnly, inProgressOnly, archiveRevision]);
 
   // Fetch matching episodes (all pages, not just loaded). Archived episodes
   // are included only when the toggle is on.
   useEffect(() => {
+    setSettledSearchKey(null);
+    const restoreCount = undoRefreshSizes.current.search;
+    undoRefreshSizes.current.search = null;
     if (!isSearching) return;
     let cancelled = false;
     pageGeneration.current += 1;
     setLoadingMore(false);
     setSearchError(null);
-    fetchPage({
-      limit: PAGE_SIZE,
-      offset: 0,
-      q: trimmedSearch,
-      includeArchived: showArchived,
-      hasTranscriptOnly,
-      inProgressOnly,
-    })
+    fetchPages(
+      {
+        q: trimmedSearch,
+        includeArchived: showArchived,
+        hasTranscriptOnly,
+        inProgressOnly,
+      },
+      restoreCount ?? PAGE_SIZE,
+    )
       .then((page) => {
         if (!cancelled) setSearchPage(page);
       })
       .catch((err) => {
         if (!cancelled) setSearchError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setSettledSearchKey(searchKey);
       });
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, trimmedSearch, isSearching, showArchived, hasTranscriptOnly, inProgressOnly]);
+  }, [
+    fetchPages,
+    trimmedSearch,
+    isSearching,
+    showArchived,
+    hasTranscriptOnly,
+    inProgressOnly,
+    searchKey,
+  ]);
 
   const page0Episodes = page0?.episodes ?? initial.episodes;
   const page0Total = page0?.total ?? initial.total;
@@ -214,6 +274,8 @@ export function useEpisodeList({ initial, podcastId }: Options) {
   }
 
   async function toggleArchive(ep: EpisodeListItem) {
+    if (archiveBusyRef.current) return;
+    archiveBusyRef.current = true;
     const next = !ep.archived;
     setArchivePendingId(ep.id);
     setArchiveError(null);
@@ -257,13 +319,45 @@ export function useEpisodeList({ initial, podcastId }: Options) {
       if (!res.ok || "error" in data) {
         throw new Error("error" in data ? data.error : `Archive failed (${res.status})`);
       }
+      setArchiveUndo(next ? ep : null);
     } catch (err) {
       setPage0(prevPage0);
       setExtraPages(prevExtra);
       setSearchPage(prevSearch);
       setArchiveError(err instanceof Error ? err.message : String(err));
     } finally {
+      archiveBusyRef.current = false;
       setArchivePendingId(null);
+    }
+  }
+
+  async function undoArchive() {
+    if (!archiveUndo || archiveBusyRef.current) return;
+    archiveBusyRef.current = true;
+    setUndoingArchive(true);
+    setArchiveError(null);
+    try {
+      const res = await api.api.episodes[":id"].archive.$patch({
+        param: { id: archiveUndo.id },
+        json: { archived: false, positionSec: archiveUndo.positionSec ?? 0 },
+      });
+      const data = await res.json();
+      if (!res.ok || "error" in data) {
+        throw new Error("error" in data ? data.error : "Could not undo archive. Try again.");
+      }
+      setArchiveUndo(null);
+      // Refetch the current filters rather than restoring a stale whole-list
+      // snapshot that could overwrite other actions or a changed search.
+      undoRefreshSizes.current = {
+        browse: browseEpisodes.length + (showArchived ? 0 : 1),
+        search: searchPage.episodes.length + (showArchived ? 0 : 1),
+      };
+      setArchiveRevision((revision) => revision + 1);
+    } catch (err) {
+      setArchiveError(err instanceof Error ? err.message : "Could not undo archive. Try again.");
+    } finally {
+      archiveBusyRef.current = false;
+      setUndoingArchive(false);
     }
   }
 
@@ -319,6 +413,10 @@ export function useEpisodeList({ initial, podcastId }: Options) {
     loadError: loadError ?? searchError ?? archiveError ?? transcriptError,
     toggleArchive,
     archivePendingId,
+    archiveUndo,
+    undoArchive,
+    undoingArchive,
+    dismissArchiveUndo: () => setArchiveUndo(null),
     downloadTranscript,
     transcriptPendingId,
     transcriptStartedIds,

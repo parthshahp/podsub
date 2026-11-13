@@ -300,16 +300,23 @@ export function getEpisodeWithPodcast(
 }
 
 const setEpisodeArchivedStmt = db.prepare(`
-  UPDATE podcast_episode SET archived = ?, position_sec = 0 WHERE id = ?
+  UPDATE podcast_episode SET archived = ?, position_sec = ? WHERE id = ?
 `);
 
 /**
  * Archive (hide = mark played) or un-archive an episode. Archiving always
- * clears the saved resume position, so un-archiving starts from the
- * beginning. Returns false when not found.
+ * clears the saved resume position. Undo can atomically restore the previous
+ * position when un-archiving; ordinary un-archiving starts at the beginning.
+ * Returns false when not found.
  */
-export function setEpisodeArchived(id: string, archived: boolean): boolean {
-  return setEpisodeArchivedStmt.run(archived ? 1 : 0, id).changes > 0;
+export function setEpisodeArchived(id: string, archived: boolean, positionSec = 0): boolean {
+  const current = getEpisodeStmt.get(id) as EpisodeRow | undefined;
+  if (!current) return false;
+  let position = archived ? 0 : Math.max(0, positionSec);
+  if (current.duration_sec != null)
+    position = Math.min(position, Math.max(0, current.duration_sec));
+  if (position < UNPLAYED_THRESHOLD_SEC) position = 0;
+  return setEpisodeArchivedStmt.run(archived ? 1 : 0, position, id).changes > 0;
 }
 
 /** Below this, a saved position is stored as 0 and reads as unplayed. */
