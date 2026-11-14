@@ -73,34 +73,3 @@ export function segmentLines(
     return tokens ? { ...line, tokens } : line;
   });
 }
-
-// Read-time segmentation is ~ms per episode, but cache it anyway so every
-// client polling the same transcript shares the work. Keyed by
-// episodeId:updatedAt, so a re-transcription naturally misses.
-const lineCache = new Map<string, SegmentedLine[]>();
-const CACHE_LIMIT = 20;
-
-/** Rewrites can happen within the same SQLite timestamp second. */
-export function invalidateSegmentedLines(episodeId: string) {
-  for (const key of lineCache.keys()) {
-    if (key.startsWith(`${episodeId}:`)) lineCache.delete(key);
-  }
-}
-
-export function getSegmentedLines(
-  episodeId: string,
-  updatedAt: number,
-  lines: { start: number; text: string }[],
-  language: string | null,
-): SegmentedLine[] {
-  const key = `${episodeId}:${updatedAt}`;
-  const hit = lineCache.get(key);
-  if (hit) return hit;
-  const segmented = segmentLines(lines, language);
-  if (lineCache.size >= CACHE_LIMIT) {
-    const oldest = lineCache.keys().next();
-    if (!oldest.done) lineCache.delete(oldest.value);
-  }
-  lineCache.set(key, segmented);
-  return segmented;
-}

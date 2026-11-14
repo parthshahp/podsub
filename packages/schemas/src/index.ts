@@ -155,8 +155,17 @@ export const EpisodePodcastSchema = z.object({
   imageUrl: z.string().nullable(),
 });
 
-/** An episode plus its parent podcast — the shape of every list row. */
-export const EpisodeListItemSchema = EpisodeSchema.extend({
+/** List-only metadata; descriptions and audio details are fetched by the player route. */
+export const EpisodeListItemSchema = EpisodeSchema.pick({
+  id: true,
+  title: true,
+  durationSec: true,
+  publishedAt: true,
+  archived: true,
+  positionSec: true,
+  hasTranscript: true,
+  transcribeStatus: true,
+}).extend({
   podcast: EpisodePodcastSchema,
 });
 

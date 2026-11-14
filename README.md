@@ -24,6 +24,15 @@ pronunciation dictionary loads locally on the first Latin-letter search and
 aliases are cached; no AI or external search service is used. Initials and episode
 title pinyin search are not included.
 
+Episode lists return only the metadata needed for browsing, playback progress,
+and transcript actions, plus a podcast summary. Full episode descriptions and
+audio metadata are fetched when opening the player, not for every list row.
+
+Feed refreshes reuse saved HTTP validators (`ETag` and `Last-Modified`), skipping
+parsing and database writes when the host returns `304 Not Modified`. At most
+three feeds refresh concurrently; imports of the same URL share an in-flight
+request. Validators are saved atomically with the imported metadata and episodes.
+
 ## Transcript search
 
 Open **Search** to find a literal word or phrase across saved transcripts, optionally
@@ -37,7 +46,10 @@ Search stays in SQLite: a small derived passage table reuses the original word
 timestamps, without a separate search service, full-text index, or generated audio
 clips. Existing transcripts are backfilled on server startup; transcription writes
 replace the affected episode's search rows atomically. Only the latest transcript
-version shown by the player is searchable. To rebuild the derived data manually:
+version shown by the player is searchable. Passages store Unicode-lowercased text,
+so queries do not lowercase the entire library repeatedly. One matching scan feeds
+both the result page and its exact total, including empty/out-of-range pages.
+To rebuild the derived data manually:
 
 ```
 pnpm --filter @podsub/server rebuild:search
@@ -101,6 +113,18 @@ The backend serves the built UI itself on `:$PORT` (default 3000), so one
 process is all you need — expose it on your LAN directly or put a reverse
 proxy in front. Persist `server/data/` (SQLite) and `podcasts/` (audio
 cache) across restarts.
+
+Playback, clipping, and transcription share complete audio downloads. A cold
+playback request still streams immediately; concurrent consumers reuse the finished
+file. Partial upstream range responses are forwarded, never saved as complete files.
+Audio cache filenames include the enclosure URL hash, so changed enclosures cannot
+overwrite each other. Legacy unversioned files age out normally; the first request
+after this upgrade downloads the source-versioned copy.
+
+Parsed transcripts and segmented display lines share a 20-entry in-memory LRU.
+Lightweight database revision checks invalidate stale entries, including same-second
+rewrites and writes from other processes. Schema migrations and search backfills
+run automatically at server startup.
 
 Podcast artwork is resized to fit within 1024 × 1024 (without upscaling), encoded
 as a quality-80 JPEG, and saved in SQLite on its first successful request.

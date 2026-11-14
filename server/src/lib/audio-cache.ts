@@ -1,54 +1,20 @@
 import { createHash } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import type { Context } from "hono";
 
 import { AUDIO_CACHE_TTL_MS, PODCASTS_DIR } from "../config.js";
 import type { EpisodeRow } from "../db/queries.js";
-import { cappedBodyStream, safeFetch } from "./safe-fetch.js";
+import { AUDIO_MIME_TYPES, createAudioStore, type CachedAudio } from "./audio-store.js";
 
-// Extension only matters for naming; chunking re-encodes to mp3 and the audio
-// endpoint maps extensions back to MIME types.
-export function extensionFor(contentType: string | null): string {
-  if (contentType?.includes("mpeg")) return ".mp3";
-  if (contentType?.includes("mp4") || contentType?.includes("m4a")) return ".m4a";
-  if (contentType?.includes("ogg")) return ".ogg";
-  if (contentType?.includes("wav")) return ".wav";
-  return ".bin";
-}
-
-const MIME_FOR_EXT: Record<string, string> = {
-  ".mp3": "audio/mpeg",
-  ".m4a": "audio/mp4",
-  ".ogg": "audio/ogg",
-  ".oga": "audio/ogg",
-  ".wav": "audio/wav",
-  ".bin": "application/octet-stream",
-};
-
-export function audioFileFor(episodeId: string, contentType: string | null): string {
-  return path.join(PODCASTS_DIR, episodeId + extensionFor(contentType));
-}
-
-/** Create the (gitignored) audio cache directory if it isn't there yet. */
-export async function ensurePodcastsDir(): Promise<void> {
-  await mkdir(PODCASTS_DIR, { recursive: true });
-}
-
-export type CachedAudio = { file: string; mime: string };
-
-/** Resolve cached audio for an episode by probing the known extensions. */
-export function resolveCachedAudio(episodeId: string): CachedAudio | null {
-  for (const [ext, mime] of Object.entries(MIME_FOR_EXT)) {
-    const file = path.join(PODCASTS_DIR, episodeId + ext);
-    if (existsSync(file)) return { file, mime };
-  }
-  return null;
-}
+const audioStore = createAudioStore({ directory: PODCASTS_DIR });
+export const resolveCachedAudio = audioStore.resolve;
+export const ensureCachedAudioFile = audioStore.ensure;
+export const retainAudio = audioStore.retain;
+export const releaseAudio = audioStore.release;
+export type { CachedAudio } from "./audio-store.js";
 
 /** ETag over the upstream URL plus on-disk bytes, so an enclosure change revalidates. */
 function audioEtag(audioUrl: string, size: number | null, mtimeMs: number | null): string {
@@ -56,27 +22,6 @@ function audioEtag(audioUrl: string, size: number | null, mtimeMs: number | null
   h.update(audioUrl);
   if (size !== null) h.update(`:${size}:${mtimeMs}`);
   return `"${h.digest("hex").slice(0, 32)}"`;
-}
-
-/** Write a stream to `file` atomically (temp + rename). */
-export async function pipeToFileAtomically(
-  body: ReadableStream<Uint8Array>,
-  file: string,
-  maxBytes: number,
-): Promise<void> {
-  const tmp = `${file}.${process.pid}.part`;
-  try {
-    await pipeline(
-      Readable.fromWeb(
-        cappedBodyStream(new Response(body), maxBytes) as unknown as NodeReadableStream,
-      ),
-      createWriteStream(tmp),
-    );
-    await rename(tmp, file);
-  } catch (err) {
-    await rm(tmp, { force: true });
-    throw err;
-  }
 }
 
 /** Serve a fully-downloaded episode file with seeking + revalidation support. */
@@ -148,44 +93,36 @@ export async function serveCachedAudio(
   });
 }
 
-// 500 MB covers any real episode and stops hostile feeds from filling the disk.
-// The timeout applies to response headers only, not the body stream.
-const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
-const AUDIO_TIMEOUT_MS = 30_000;
-
 /**
  * Cold-cache fallback: stream the upstream enclosure through to the client,
  * teeing a full (200) response to disk so it's only ever downloaded once.
  */
 export async function proxyUpstreamAudio(c: Context, episode: EpisodeRow): Promise<Response> {
+  // Cold-cache validators depend only on the enclosure URL. Revalidation
+  // should not start a download merely to cancel its client stream.
+  const etag = audioEtag(episode.audio_url, null, null);
+  if (c.req.header("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers: { etag } });
+  }
   const clientRange = c.req.header("range") ?? undefined;
   let upstream: Response;
   try {
-    upstream = await safeFetch(
-      episode.audio_url,
-      {
-        ...(c.req.method === "HEAD" ? { method: "HEAD" } : {}),
-        ...(clientRange ? { headers: { range: clientRange } } : {}),
-      },
-      { timeoutMs: AUDIO_TIMEOUT_MS },
-    );
+    const source = await audioStore.open(episode, {
+      ...(c.req.method === "HEAD" ? { method: "HEAD" } : {}),
+      ...(clientRange ? { headers: { range: clientRange } } : {}),
+    });
+    if (source.kind === "cached") return serveCachedAudio(c, episode, source.audio);
+    upstream = source.response;
   } catch (err) {
     console.error(`Audio proxy fetch failed for episode ${episode.id}:`, err);
     return c.json({ error: "Upstream audio fetch failed" }, 502);
   }
-  if (!upstream.ok || !upstream.body) {
-    await upstream.body?.cancel().catch(() => {});
+  if (!upstream.ok || (c.req.method !== "HEAD" && !upstream.body)) {
+    void upstream.body?.cancel().catch(() => {});
     return c.json({ error: "Upstream audio fetch failed" }, 502);
   }
 
   const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
-  // No size/mtime yet — the URL hash still busts caches when the enclosure changes.
-  const etag = audioEtag(episode.audio_url, null, null);
-  if (c.req.header("if-none-match") === etag) {
-    await upstream.body.cancel().catch(() => {});
-    return new Response(null, { status: 304, headers: { etag } });
-  }
-
   if (upstream.status === 206) {
     const headers: Record<string, string> = {
       "content-type": contentType,
@@ -198,14 +135,13 @@ export async function proxyUpstreamAudio(c: Context, episode: EpisodeRow): Promi
       if (v) headers[h] = v;
     }
     if (c.req.method === "HEAD") {
-      await upstream.body.cancel().catch(() => {});
+      await upstream.body?.cancel().catch(() => {});
       return new Response(null, { status: 206, headers });
     }
     return new Response(upstream.body, { status: 206, headers });
   }
 
-  // Tee one branch to disk in the background; it keeps pulling even if the
-  // client disconnects, so abandoned playback still warms the cache.
+  // The shared store owns the background cache write, independently of the client.
   const headers: Record<string, string> = {
     "content-type": contentType,
     "accept-ranges": "bytes",
@@ -215,40 +151,14 @@ export async function proxyUpstreamAudio(c: Context, episode: EpisodeRow): Promi
   const contentLength = upstream.headers.get("content-length");
   if (contentLength) headers["content-length"] = contentLength;
   if (c.req.method === "HEAD") {
-    await upstream.body.cancel().catch(() => {});
+    await upstream.body?.cancel().catch(() => {});
     return new Response(null, { status: 200, headers });
   }
 
-  const [forClient, forDisk] = upstream.body.tee();
-  const file = audioFileFor(episode.id, contentType);
-  void (async () => {
-    retainAudio(episode.id);
-    try {
-      await ensurePodcastsDir();
-      await pipeToFileAtomically(forDisk, file, MAX_AUDIO_BYTES);
-      console.log(`Cached ${episode.audio_url} -> ${file}`);
-    } catch (err) {
-      await forDisk.cancel().catch(() => {});
-      console.error(`Audio cache write failed for episode ${episode.id}:`, err);
-    } finally {
-      releaseAudio(episode.id);
-    }
-  })();
-  return new Response(forClient, { status: 200, headers });
+  return new Response(upstream.body, { status: 200, headers });
 }
 
 // --- Eviction ---
-
-// In-flight download/transcription ids; the sweep never deletes these.
-const activeAudio = new Set<string>();
-
-export function retainAudio(episodeId: string): void {
-  activeAudio.add(episodeId);
-}
-
-export function releaseAudio(episodeId: string): void {
-  activeAudio.delete(episodeId);
-}
 
 // Last-serve timestamps; mtime alone would only record the download.
 const servedAt = new Map<string, number>();
@@ -261,21 +171,14 @@ function markAudioServed(episodeId: string): void {
 // Crash-orphaned partial downloads are reaped aggressively.
 const PART_ORPHAN_MS = 60 * 60 * 1000;
 
-// Temp files: `<episodeId>.<ext>.<pid>.part`; ids are UUIDs (no dots).
+// Both source-versioned files and legacy cache entries start with the episode id.
 function episodeIdForEntry(entry: string): string | null {
-  const [, episodeId] = /^(.+)\.[^.]+\.\d+\.part$/.exec(entry) ?? [];
-  if (episodeId) return episodeId;
   const dot = entry.indexOf(".");
   return dot === -1 ? null : entry.slice(0, dot);
 }
 
 /** Delete every cached audio file (plus orphaned .part files) for an episode. */
 export async function deleteCachedAudio(episodeId: string): Promise<void> {
-  await Promise.all(
-    Object.keys(MIME_FOR_EXT).map((ext) =>
-      rm(path.join(PODCASTS_DIR, episodeId + ext), { force: true }),
-    ),
-  );
   let entries: string[];
   try {
     entries = await readdir(PODCASTS_DIR);
@@ -284,7 +187,11 @@ export async function deleteCachedAudio(episodeId: string): Promise<void> {
   }
   await Promise.all(
     entries
-      .filter((e) => e.startsWith(`${episodeId}.`) && e.endsWith(".part"))
+      .filter(
+        (e) =>
+          e.startsWith(`${episodeId}.`) &&
+          (e.endsWith(".part") || path.extname(e) in AUDIO_MIME_TYPES),
+      )
       .map((e) => rm(path.join(PODCASTS_DIR, e), { force: true })),
   );
 }
@@ -300,9 +207,9 @@ export async function sweepAudioCache(now = Date.now()): Promise<{ deleted: stri
   }
   for (const entry of entries) {
     const isPart = entry.endsWith(".part");
-    if (!isPart && !(path.extname(entry) in MIME_FOR_EXT)) continue; // not ours
+    if (!isPart && !(path.extname(entry) in AUDIO_MIME_TYPES)) continue; // not ours
     const id = episodeIdForEntry(entry);
-    if (id !== null && activeAudio.has(id)) continue;
+    if (id !== null && audioStore.isActive(id)) continue;
     const file = path.join(PODCASTS_DIR, entry);
     const st = await stat(file).catch(() => null);
     if (!st) continue;

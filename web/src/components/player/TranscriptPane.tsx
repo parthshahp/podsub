@@ -56,6 +56,7 @@ export const TranscriptPane = memo(function TranscriptPane({
   onScroll,
   onResumeFollow,
 }: TranscriptPaneProps) {
+  const dialogLineIndex = dialogKey === null ? -1 : Number(dialogKey.split(":", 1)[0]);
   return (
     <>
       <ol
@@ -75,7 +76,7 @@ export const TranscriptPane = memo(function TranscriptPane({
             line={line}
             index={i}
             isActive={i === activeIdx}
-            dialogKey={dialogKey}
+            dialogKey={i === dialogLineIndex ? dialogKey : null}
             onSeek={onSeekLine}
             onExplain={onExplainLine}
           />

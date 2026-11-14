@@ -13,6 +13,10 @@ const { createTranscriptSearch, findHighlights } = await tsImport(
   import.meta.url,
 );
 const { createSearchRoutes } = await tsImport("../src/routes/search.ts", import.meta.url);
+const { createTranscriptReader } = await tsImport(
+  "../src/db/transcript-reader.ts",
+  import.meta.url,
+);
 const { appendWordToLine, groupWordsIntoLines } = await tsImport(
   "../src/lib/transcript-text.ts",
   import.meta.url,
@@ -29,8 +33,8 @@ const migrations = await Promise.all(
     .map((name) => readFile(new URL(name, migrationsDir), "utf8")),
 );
 
-function setup(t) {
-  const db = new Database(":memory:");
+function setup(t, options = {}) {
+  const db = new Database(":memory:", options);
   db.pragma("foreign_keys = ON");
   migrations.forEach((sql) => db.exec(sql));
   t.after(() => db.close());
@@ -48,8 +52,7 @@ function setup(t) {
     transcriptSearch: store,
     appendWordToLine,
     groupWordsIntoLines,
-    getSegmentedLines: (_id, _updated, lines) => lines,
-    invalidateSegmentedLines() {},
+    createTranscriptReader,
     crypto: { randomUUID },
   });
   function source(episodeId, texts, { id = randomUUID(), model = id, updated = 100 } = {}) {
@@ -117,6 +120,62 @@ test("filters and paginates before returning results, including archived episode
   assert.equal(search("学习", { podcastId: "p2" }).total, 1);
   assert.equal(search("学习", { podcastId: "missing" }).total, 0);
   assert.equal(search("学习", { offset: 50 }).results.length, 0);
+  assert.equal(search("学习", { offset: 50 }).total, 3);
+  assert.equal(search("missing", { offset: 50 }).total, 0);
+});
+
+test("normalizes Unicode when indexing, not with per-passage JavaScript calls during search", (t) => {
+  const { db, store, source, search } = setup(t);
+  source("e2", ["ÉCOLE", "İ", "😀学习。"]);
+  store.backfill();
+  assert.equal(
+    db.prepare("SELECT normalized_text FROM transcript_passage").get().normalized_text,
+    "école i\u0307 😀学习。",
+  );
+  db.function("podsub_lower", () => {
+    throw new Error("must not lowercase passages at search time");
+  });
+  assert.equal(search("ÉCOLE").total, 1);
+  const chinese = search("学习").results[0];
+  assert.deepEqual(chinese.highlights, [{ start: 10, end: 12 }]);
+  assert.equal(chinese.matchSec, 104);
+  assert.equal(search("i\u0307").total, 1);
+});
+
+test("one matching scan supplies both the page and its exact count", (t) => {
+  const statements = [];
+  const { db, store, source, search } = setup(t, { verbose: (sql) => statements.push(sql) });
+  source("e1", ["学习。", "学习。"]);
+  source("e2", ["学习。"]);
+  store.backfill();
+  for (const offset of [0, 99]) {
+    statements.length = 0;
+    const result = search("学习", { limit: 1, offset });
+    assert.equal(result.total, 3);
+    const matchingQueries = statements.filter((sql) =>
+      sql.includes("WITH matches AS MATERIALIZED"),
+    );
+    assert.equal(matchingQueries.length, 1);
+    const plan = db.prepare("EXPLAIN QUERY PLAN " + matchingQueries[0]).all();
+    assert.equal(plan.filter((step) => /^SCAN s\b/.test(step.detail)).length, 1);
+  }
+});
+
+test("versioned backfill upgrades old normalized data and catches same-second source rewrites", (t) => {
+  const { db, store, source, search } = setup(t);
+  source("e1", ["旧版本。"]);
+  store.backfill();
+  db.exec("UPDATE transcript_passage SET normalized_text = ''");
+  db.exec("UPDATE transcript_search_state SET index_version = 1");
+  assert.equal(store.backfill(), 1);
+  assert.equal(search("旧版本").total, 1);
+  db.prepare("UPDATE transcript SET segments = ? WHERE episode_id = 'e1'").run(
+    JSON.stringify([{ text: "新版本。", start: 40, end: 42 }]),
+  );
+  assert.equal(store.backfill(), 1);
+  assert.equal(store.backfill(), 0);
+  assert.equal(search("旧版本").total, 0);
+  assert.equal(search("新版本").results[0].matchSec, 40);
 });
 
 test("only the active player transcript is indexed, including deterministic timestamp ties", (t) => {

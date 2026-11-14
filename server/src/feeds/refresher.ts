@@ -1,7 +1,4 @@
-import {
-  FEED_REFRESH_INTERVAL_MS,
-  FEED_REFRESH_STARTUP_DELAY_MS,
-} from "../config.js";
+import { FEED_REFRESH_INTERVAL_MS, FEED_REFRESH_STARTUP_DELAY_MS } from "../config.js";
 import { listPodcastFeeds } from "../db/queries.js";
 import { importFeed } from "./importer.js";
 
@@ -32,16 +29,23 @@ export async function refreshAllFeeds(reason: string): Promise<FeedRefreshSummar
 
     let ok = 0;
     let failed = 0;
-    // Sequential: avoids hammering upstreams and keeps SQLite contention nil.
-    for (const feed of feeds) {
-      try {
-        await importFeed(feed.feed_url);
-        ok++;
-      } catch (err) {
-        failed++;
-        console.error(`Feed refresh failed for "${feed.title}" (${feed.feed_url}):`, err);
-      }
-    }
+    // Overlap network waits, not transactions: SQLite writes are synchronous.
+    // A fixed worker pool bounds upstream load even with a large subscription list.
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(3, feeds.length) }, async () => {
+        while (next < feeds.length) {
+          const feed = feeds[next++]!;
+          try {
+            await importFeed(feed.feed_url);
+            ok++;
+          } catch (err) {
+            failed++;
+            console.error(`Feed refresh failed for "${feed.title}" (${feed.feed_url}):`, err);
+          }
+        }
+      }),
+    );
     console.log(`Feed refresh (${reason}): ${ok} ok, ${failed} failed of ${feeds.length}`);
     return { ok, failed, total: feeds.length };
   } finally {
@@ -57,9 +61,6 @@ export async function refreshAllFeeds(reason: string): Promise<FeedRefreshSummar
 export function startFeedRefresher(): void {
   const timer = setInterval(() => void refreshAllFeeds("scheduled"), FEED_REFRESH_INTERVAL_MS);
   timer.unref();
-  const startup = setTimeout(
-    () => void refreshAllFeeds("startup"),
-    FEED_REFRESH_STARTUP_DELAY_MS,
-  );
+  const startup = setTimeout(() => void refreshAllFeeds("startup"), FEED_REFRESH_STARTUP_DELAY_MS);
   startup.unref();
 }

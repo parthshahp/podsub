@@ -1,20 +1,11 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import { CHUNK_DELAY_MS, CHUNK_SECONDS, MODEL } from "../config.js";
-import {
-  audioFileFor,
-  ensurePodcastsDir,
-  pipeToFileAtomically,
-  releaseAudio,
-  resolveCachedAudio,
-  retainAudio,
-} from "../lib/audio-cache.js";
-import { safeFetch } from "../lib/safe-fetch.js";
+import { ensureCachedAudioFile, releaseAudio, retainAudio } from "../lib/audio-cache.js";
 import { saveTranscript, type EpisodeRow } from "../db/queries.js";
 
 const execFileP = promisify(execFile);
@@ -24,42 +15,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import type { Word, Transcript } from "@podsub/schemas";
 import { groupWordsIntoLines } from "../lib/transcript-text.js";
 export { appendWordToLine, groupWordsIntoLines } from "../lib/transcript-text.js";
-
-// 500 MB caps disk use; the timeout applies to response headers only.
-const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
-const AUDIO_TIMEOUT_MS = 30_000;
-
-async function downloadAudio(episode: EpisodeRow): Promise<string> {
-  // Cache hit first: skips the HEAD entirely, so a slow upstream can't time
-  // out an episode whose audio is already on disk.
-  const cached = resolveCachedAudio(episode.id);
-  if (cached) {
-    console.log(`Audio already downloaded: ${cached.file}`);
-    return cached.file;
-  }
-
-  const head = await safeFetch(
-    episode.audio_url,
-    { method: "HEAD" },
-    { timeoutMs: AUDIO_TIMEOUT_MS },
-  );
-  const file = audioFileFor(episode.id, head.headers.get("content-type"));
-
-  if (existsSync(file)) {
-    console.log(`Audio already downloaded: ${file}`);
-    return file;
-  }
-
-  console.log(`Downloading ${episode.audio_url} -> ${file}...`);
-  const res = await safeFetch(episode.audio_url, {}, { timeoutMs: AUDIO_TIMEOUT_MS });
-  if (!res.ok || !res.body) {
-    throw new Error(`Audio download failed with status ${res.status}`);
-  }
-  // Atomic temp-then-rename write.
-  await ensurePodcastsDir();
-  await pipeToFileAtomically(res.body, file, MAX_AUDIO_BYTES);
-  return file;
-}
 
 async function transcribeChunk(
   apiKey: string,
@@ -128,7 +83,7 @@ export async function transcribeEpisode(
 }
 
 async function transcribeEpisodeInner(episode: EpisodeRow, model: string): Promise<Transcript> {
-  const file = await downloadAudio(episode);
+  const { file } = await ensureCachedAudioFile(episode);
   console.log(`Transcribing ${file} with ${model}...`);
 
   const dir = await mkdtemp(path.join(tmpdir(), "podsub-"));

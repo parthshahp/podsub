@@ -43,7 +43,7 @@ export const AUDIO_CACHE_TTL_MS = 1 * 60 * 60 * 1000;
 export const AUDIO_CACHE_SWEEP_MS = 2 * 60 * 60 * 1000;
 
 // How often all subscribed feeds are re-fetched for new episodes.
-// Sequential and failure-isolated per feed, so a few dozen shows is cheap.
+// Refreshes use three workers and isolate failures per feed.
 export const FEED_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 // Delay after boot before the first refresh, so the server starts fast.

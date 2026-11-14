@@ -22,9 +22,10 @@ import {
 import { transcribeEpisode } from "../transcription/index.js";
 import { MODEL, isTranscribeModel } from "../config.js";
 import { getJob, getTranscribeError, getTranscribeStatus, setJob } from "../transcription/jobs.js";
-import { cutAudioClip, ensureCachedAudioFile, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
+import { cutAudioClip, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
 import {
   proxyUpstreamAudio,
+  ensureCachedAudioFile,
   releaseAudio,
   resolveCachedAudio,
   retainAudio,
@@ -124,7 +125,7 @@ export const episodeRoutes = new Hono()
     const row = getEpisodeWithPodcast(c.req.param("id"));
     if (!row) return c.json({ error: "Not found" }, 404);
 
-    const hit = resolveCachedAudio(row.episode.id);
+    const hit = resolveCachedAudio(row.episode);
     if (hit) {
       try {
         return await serveCachedAudio(c, row.episode, hit);

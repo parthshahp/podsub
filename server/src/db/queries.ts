@@ -1,13 +1,12 @@
 import { db, transcriptSearch } from "./index.js";
-import { appendWordToLine, groupWordsIntoLines } from "../lib/transcript-text.js";
-import { getSegmentedLines, invalidateSegmentedLines } from "../transcription/segment.js";
+import { appendWordToLine } from "../lib/transcript-text.js";
+import { createTranscriptReader } from "./transcript-reader.js";
 import type {
   Episode,
   EpisodeListItem,
   Podcast,
   PodcastList,
   TranscribeStatus,
-  Transcript,
   Word,
 } from "@podsub/schemas";
 
@@ -25,15 +24,6 @@ export type PodcastRow = {
   updated_at: number;
 };
 
-// List queries add `has_transcript` via a correlated EXISTS (backed by
-// idx_transcript_episode) and the parent podcast summary via a join — no
-// extra round-trip per row.
-export type EpisodeListItemRow = EpisodeRow & {
-  has_transcript: 0 | 1;
-  podcast_title: string;
-  podcast_image_url: string | null;
-};
-
 export type EpisodeRow = {
   id: string;
   podcast_id: string;
@@ -49,6 +39,20 @@ export type EpisodeRow = {
   /** Resume point in seconds; always 0 when archived. */
   position_sec: number;
   created_at: number;
+};
+
+type EpisodeSummaryRow = Pick<
+  EpisodeRow,
+  "id" | "title" | "duration_sec" | "published_at" | "archived" | "position_sec"
+>;
+
+// Fetch only list metadata, not descriptions or audio details. EXISTS and the
+// podcast join keep transcript status and parent summaries in the same query.
+export type EpisodeListItemRow = EpisodeSummaryRow & {
+  podcast_id: string;
+  has_transcript: 0 | 1;
+  podcast_title: string;
+  podcast_image_url: string | null;
 };
 
 // better-sqlite3 refuses to bind undefined; nullable columns go through this.
@@ -85,6 +89,27 @@ const listPodcastFeedsStmt = db.prepare(`
 const getPodcastStmt = db.prepare(`
   SELECT * FROM podcast WHERE id = ?
 `);
+
+const getPodcastByFeedUrlStmt = db.prepare(`
+  SELECT p.*, s.etag, s.last_modified FROM podcast p
+  LEFT JOIN podcast_feed_state s ON s.podcast_id = p.id
+  WHERE p.feed_url = ?
+`);
+
+const saveFeedValidatorsStmt = db.prepare(`
+  INSERT INTO podcast_feed_state (podcast_id, etag, last_modified) VALUES (?, ?, ?)
+  ON CONFLICT(podcast_id) DO UPDATE SET etag = excluded.etag, last_modified = excluded.last_modified
+`);
+
+export function getPodcastByFeedUrl(feedUrl: string) {
+  return getPodcastByFeedUrlStmt.get(feedUrl) as
+    | (PodcastRow & { etag: string | null; last_modified: string | null })
+    | undefined;
+}
+
+export function saveFeedValidators(id: string, etag: string | null, lastModified: string | null) {
+  saveFeedValidatorsStmt.run(id, etag, lastModified);
+}
 
 const listEpisodeIdsForPodcastStmt = db.prepare(`
   SELECT id FROM podcast_episode WHERE podcast_id = ?
@@ -157,7 +182,8 @@ function buildEpisodeListSql(
     return `SELECT count(*) AS count FROM podcast_episode e${whereSql}`;
   }
   return `
-    SELECT e.*, p.title AS podcast_title, p.image_url AS podcast_image_url,
+    SELECT e.id, e.podcast_id, e.title, e.duration_sec, e.published_at, e.archived, e.position_sec,
+      p.title AS podcast_title, p.image_url AS podcast_image_url,
       EXISTS (SELECT 1 FROM transcript WHERE episode_id = e.id) AS has_transcript
     FROM podcast_episode e
     LEFT JOIN podcast p ON p.id = e.podcast_id${whereSql}
@@ -197,13 +223,7 @@ const getEpisodeStmt = db.prepare(`
   SELECT * FROM podcast_episode WHERE id = ?
 `);
 
-// Only ASR transcripts have segments; latest by updated_at.
-const getTranscriptStmt = db.prepare(`
-  SELECT model, language, segments, updated_at FROM transcript
-  WHERE episode_id = ? AND segments IS NOT NULL
-  ORDER BY updated_at DESC, rowid DESC
-  LIMIT 1
-`);
+export const getTranscript = createTranscriptReader(db).get;
 
 // Lightweight existence check — no need to parse the full transcript.
 const hasTranscriptStmt = db.prepare(`
@@ -253,40 +273,10 @@ export function deletePodcast(id: string): { deleted: boolean; episodeIds: strin
   })();
 }
 
-/** Load the most recent transcript, deriving `lines` at read time. */
+/** Lightweight transcript existence check for lists and episode status. */
 export function hasTranscript(episodeId: string): boolean {
   const row = hasTranscriptStmt.get(episodeId) as { present: 0 | 1 };
   return row.present === 1;
-}
-
-export function getTranscript(episodeId: string): Transcript | undefined {
-  const row = getTranscriptStmt.get(episodeId) as
-    | {
-        model: string;
-        language: string | null;
-        segments: string;
-        updated_at: number;
-      }
-    | undefined;
-  if (!row) return undefined;
-
-  const segments = JSON.parse(row.segments) as Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
-  const words: Word[] = segments.map((s) => ({
-    word: s.text,
-    start: s.start,
-    end: s.end,
-  }));
-
-  return {
-    model: row.model,
-    words,
-    lines: getSegmentedLines(episodeId, row.updated_at, groupWordsIntoLines(words), row.language),
-    updatedAt: new Date(row.updated_at * 1000).toISOString(),
-  };
 }
 
 export function getEpisodeWithPodcast(
@@ -435,8 +425,23 @@ export function saveTranscript(
     transcriptSearch.replaceEpisode(episodeId);
     return saved;
   })();
-  invalidateSegmentedLines(episodeId);
   return new Date(row.updated_at * 1000).toISOString();
+}
+
+function episodeSummaryFromRow(
+  row: EpisodeSummaryRow & { has_transcript?: number },
+  transcribeStatus: TranscribeStatus = "idle",
+) {
+  return {
+    id: row.id,
+    title: row.title,
+    durationSec: row.duration_sec,
+    publishedAt: row.published_at == null ? null : new Date(row.published_at * 1000).toISOString(),
+    archived: row.archived === 1,
+    positionSec: row.position_sec ?? 0,
+    hasTranscript: (row.has_transcript ?? 0) === 1,
+    transcribeStatus,
+  };
 }
 
 export function episodeFromRow(
@@ -444,19 +449,12 @@ export function episodeFromRow(
   transcribeStatus: TranscribeStatus = "idle",
 ): Episode {
   return {
-    id: row.id,
+    ...episodeSummaryFromRow(row, transcribeStatus),
     guid: row.guid,
-    title: row.title,
     description: row.description,
     audioUrl: row.audio_url,
     audioLength: row.audio_length,
-    durationSec: row.duration_sec,
-    publishedAt: row.published_at == null ? null : new Date(row.published_at * 1000).toISOString(),
     episodeType: row.episode_type as Episode["episodeType"],
-    archived: row.archived === 1,
-    positionSec: row.position_sec ?? 0,
-    hasTranscript: (row.has_transcript ?? 0) === 1,
-    transcribeStatus,
   };
 }
 
@@ -466,7 +464,7 @@ export function episodeListItemFromRow(
   transcribeStatus: TranscribeStatus = "idle",
 ): EpisodeListItem {
   return {
-    ...episodeFromRow(row, transcribeStatus),
+    ...episodeSummaryFromRow(row, transcribeStatus),
     podcast: {
       id: row.podcast_id,
       title: row.podcast_title,

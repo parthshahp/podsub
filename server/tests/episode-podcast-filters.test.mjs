@@ -4,9 +4,21 @@ import * as nodeModule from "node:module";
 import { test } from "node:test";
 import vm from "node:vm";
 import Database from "better-sqlite3";
-import { ArchiveEpisodeInputSchema, ListEpisodesQuerySchema } from "@podsub/schemas";
+import { tsImport } from "tsx/esm/api";
+import {
+  ArchiveEpisodeInputSchema,
+  EpisodeListItemSchema,
+  EpisodeListSchema,
+  EpisodeSchema,
+  ListEpisodesQuerySchema,
+  PodcastDetailSchema,
+} from "@podsub/schemas";
 
 // Evaluate the queries against an isolated in-memory database, never the library DB.
+const { createTranscriptReader } = await tsImport(
+  "../src/db/transcript-reader.ts",
+  import.meta.url,
+);
 const source = await readFile(new URL("../src/db/queries.ts", import.meta.url), "utf8");
 let stripped;
 if (nodeModule.stripTypeScriptTypes) {
@@ -23,9 +35,19 @@ const migrations = new URL("../data/migrations/", import.meta.url);
 for (const file of (await readdir(migrations)).filter((name) => name.endsWith(".sql")).sort()) {
   db.exec(await readFile(new URL(file, migrations), "utf8"));
 }
-const { listEpisodes, listPodcasts, setEpisodeArchived, updateEpisodePlayback } = new vm.Script(
-  javascript + "\n({ listEpisodes, listPodcasts, setEpisodeArchived, updateEpisodePlayback });",
-).runInNewContext({ db });
+const {
+  episodeFromRow,
+  episodeListItemFromRow,
+  getEpisodeWithPodcast,
+  listEpisodes,
+  listPodcasts,
+  podcastFromRow,
+  setEpisodeArchived,
+  updateEpisodePlayback,
+} = new vm.Script(
+  javascript +
+    "\n({ episodeFromRow, episodeListItemFromRow, getEpisodeWithPodcast, listEpisodes, listPodcasts, podcastFromRow, setEpisodeArchived, updateEpisodePlayback });",
+).runInNewContext({ db, createTranscriptReader });
 
 db.exec(`
   INSERT INTO podcast (id, feed_url, title, created_at, updated_at)
@@ -36,6 +58,111 @@ db.exec(`
          ('c1', 'c', 'c1', 'Other episode', 'https://c.test/1', 2, 2, 0, 0),
          ('a2', 'a', 'a2', 'Archived episode', 'https://a.test/2', 1, 1, 1, 0);
 `);
+const description = "Long episode show notes. ".repeat(1000);
+db.prepare(`
+  UPDATE podcast_episode
+  SET description = ?, audio_length = 1000000, duration_sec = 600, episode_type = 'full'
+  WHERE id = 'a1'
+`).run(description);
+db.exec(`
+  INSERT INTO transcript (id, episode_id, model, segments)
+  VALUES ('t1', 'a1', 'test', '[]');
+`);
+
+test("list queries select only summary columns for global and per-podcast pages", () => {
+  const columns = [
+    "id",
+    "podcast_id",
+    "title",
+    "duration_sec",
+    "published_at",
+    "archived",
+    "position_sec",
+    "podcast_title",
+    "podcast_image_url",
+    "has_transcript",
+  ].sort();
+  for (const filters of [{}, { podcastId: "a" }]) {
+    const { rows, total } = listEpisodes({ ...filters, limit: 1, offset: 0 });
+    assert.equal(total, filters.podcastId ? 1 : 3);
+    assert.equal(rows[0].id, "a1");
+    assert.deepEqual(Object.keys(rows[0]).sort(), columns);
+  }
+});
+
+test("list payloads satisfy both page contracts without detail-only fields", () => {
+  const { rows, total } = listEpisodes({ limit: 1, offset: 0 });
+  const item = episodeListItemFromRow(rows[0], "running");
+  const expected = {
+    id: "a1",
+    title: "Matching episode",
+    durationSec: 600,
+    publishedAt: new Date(4000).toISOString(),
+    archived: false,
+    positionSec: 10,
+    hasTranscript: true,
+    transcribeStatus: "running",
+    podcast: { id: "a", title: "A", imageUrl: null },
+  };
+  // VM-created objects have a different prototype; compare their wire shapes.
+  assert.deepEqual(JSON.parse(JSON.stringify(item)), expected);
+  assert.deepEqual(EpisodeListItemSchema.strict().parse(item), expected);
+  assert.equal(
+    EpisodeListSchema.safeParse({ episodes: [item], total, limit: 1, offset: 0 }).success,
+    true,
+  );
+  const { podcast } = getEpisodeWithPodcast("a1");
+  assert.equal(
+    PodcastDetailSchema.safeParse({
+      podcast: podcastFromRow(podcast),
+      episodes: [item],
+      total: 1,
+      limit: 1,
+      offset: 0,
+    }).success,
+    true,
+  );
+});
+
+test("summaries preserve nullable metadata and default transcription status", () => {
+  const { rows } = listEpisodes({ podcastId: "b", limit: 1, offset: 0 });
+  const item = episodeListItemFromRow(rows[0]);
+  assert.equal(item.durationSec, null);
+  assert.equal(item.hasTranscript, false);
+  assert.equal(item.transcribeStatus, "idle");
+  assert.equal(EpisodeListItemSchema.strict().safeParse(item).success, true);
+
+  db.prepare(`
+    INSERT INTO podcast_episode (id, podcast_id, guid, title, audio_url)
+    VALUES ('undated', 'b', 'undated', 'Undated', 'https://b.test/undated')
+  `).run();
+  try {
+    const undated = listEpisodes({ q: "Undated", limit: 1, offset: 0 }).rows[0];
+    assert.equal(episodeListItemFromRow(undated).publishedAt, null);
+  } finally {
+    db.prepare("DELETE FROM podcast_episode WHERE id = 'undated'").run();
+  }
+});
+
+test("episode details retain full metadata while list payloads stay small", () => {
+  const { episode } = getEpisodeWithPodcast("a1");
+  const detail = episodeFromRow({ ...episode, has_transcript: 1 });
+  assert.equal(EpisodeSchema.strict().safeParse(detail).success, true);
+  assert.equal(detail.guid, "a1");
+  assert.equal(detail.description, description);
+  assert.equal(detail.audioUrl, "https://a.test/1");
+  assert.equal(detail.audioLength, 1000000);
+  assert.equal(detail.episodeType, "full");
+  assert.equal(detail.hasTranscript, true);
+  assert.equal(detail.positionSec, 10);
+
+  const { rows } = listEpisodes({ podcastId: "a", limit: 1, offset: 0 });
+  const item = episodeListItemFromRow(rows[0]);
+  assert.ok(
+    Buffer.byteLength(JSON.stringify(item)) < Buffer.byteLength(JSON.stringify(detail)) / 10,
+    "show notes must not inflate list responses",
+  );
+});
 
 test("includes multiple podcasts before pagination and counting", () => {
   const first = listEpisodes({ includePodcastIds: ["a", "b"], limit: 1, offset: 0 });
