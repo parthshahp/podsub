@@ -93,18 +93,26 @@ test("shared cached files preserve byte ranges, suffix ranges, HEAD and ETag rev
   assert.equal(h.calls(), 1);
 });
 
-test("cold HEAD succeeds and cold revalidation does not start a download", async (t) => {
+test("cold HEAD has no URL-only validator and conditional GET fetches the source", async (t) => {
   const h = await setup(t, async (_url, init) => {
-    assert.equal(init.method, "HEAD");
-    return new Response(null, { headers: { "content-length": "10" } });
+    return new Response(init.method === "HEAD" ? null : "0123456789", {
+      headers: { "content-type": "audio/mpeg", "content-length": "10" },
+    });
   });
   const head = await h.app.request("/audio", { method: "HEAD" });
   assert.equal(head.status, 200);
+  assert.equal(head.headers.get("etag"), null);
+  assert.equal(head.headers.get("cache-control"), "public, no-cache");
+  const legacyEtag = `"${createHash("sha256").update(episode.audio_url).digest("hex").slice(0, 32)}"`;
   const response = await h.app.request("/audio", {
-    headers: { "if-none-match": head.headers.get("etag") },
+    headers: { "if-none-match": legacyEtag },
   });
-  assert.equal(response.status, 304);
-  assert.equal(h.calls(), 1);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("etag"), null);
+  assert.equal(response.headers.get("cache-control"), "public, no-cache");
+  assert.equal(await response.text(), "0123456789");
+  await h.api.ensureCachedAudioFile(episode);
+  assert.equal(h.calls(), 2);
 });
 
 test("partial upstream responses preserve range headers without warming a complete file", async (t) => {

@@ -16,11 +16,11 @@ export const retainAudio = audioStore.retain;
 export const releaseAudio = audioStore.release;
 export type { CachedAudio } from "./audio-store.js";
 
-/** ETag over the upstream URL plus on-disk bytes, so an enclosure change revalidates. */
-function audioEtag(audioUrl: string, size: number | null, mtimeMs: number | null): string {
+/** Validator for the current local source (not an upstream freshness check). */
+export function audioEtag(audioUrl: string, size: number, mtimeMs: number): string {
   const h = createHash("sha256");
   h.update(audioUrl);
-  if (size !== null) h.update(`:${size}:${mtimeMs}`);
+  h.update(`:${size}:${mtimeMs}`);
   return `"${h.digest("hex").slice(0, 32)}"`;
 }
 
@@ -37,7 +37,7 @@ export async function serveCachedAudio(
     "content-type": hit.mime,
     "accept-ranges": "bytes",
     etag,
-    "cache-control": "public, max-age=31536000", // revalidated via ETag
+    "cache-control": "public, no-cache", // Store, but validate before reuse.
   };
 
   if (c.req.header("if-none-match") === etag) {
@@ -98,12 +98,6 @@ export async function serveCachedAudio(
  * teeing a full (200) response to disk so it's only ever downloaded once.
  */
 export async function proxyUpstreamAudio(c: Context, episode: EpisodeRow): Promise<Response> {
-  // Cold-cache validators depend only on the enclosure URL. Revalidation
-  // should not start a download merely to cancel its client stream.
-  const etag = audioEtag(episode.audio_url, null, null);
-  if (c.req.header("if-none-match") === etag) {
-    return new Response(null, { status: 304, headers: { etag } });
-  }
   const clientRange = c.req.header("range") ?? undefined;
   let upstream: Response;
   try {
@@ -123,12 +117,13 @@ export async function proxyUpstreamAudio(c: Context, episode: EpisodeRow): Promi
   }
 
   const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+  // No local file identity yet. A URL-only validator could incorrectly return
+  // 304 after eviction and an upstream replacement at the same URL.
   if (upstream.status === 206) {
     const headers: Record<string, string> = {
       "content-type": contentType,
       "accept-ranges": "bytes",
-      "cache-control": "public, max-age=86400",
-      etag,
+      "cache-control": "public, no-cache",
     };
     for (const h of ["content-length", "content-range"]) {
       const v = upstream.headers.get(h);
@@ -145,8 +140,7 @@ export async function proxyUpstreamAudio(c: Context, episode: EpisodeRow): Promi
   const headers: Record<string, string> = {
     "content-type": contentType,
     "accept-ranges": "bytes",
-    "cache-control": "public, max-age=86400",
-    etag,
+    "cache-control": "public, no-cache",
   };
   const contentLength = upstream.headers.get("content-length");
   if (contentLength) headers["content-length"] = contentLength;

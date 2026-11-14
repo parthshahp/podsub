@@ -1,14 +1,11 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
+import { chunkAudio } from "./chunk-audio.js";
 
 import { CHUNK_DELAY_MS, CHUNK_SECONDS, MODEL } from "../config.js";
 import { ensureCachedAudioFile, releaseAudio, retainAudio } from "../lib/audio-cache.js";
 import { saveTranscript, type EpisodeRow } from "../db/queries.js";
-
-const execFileP = promisify(execFile);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -41,33 +38,6 @@ async function transcribeChunk(
   return res.json();
 }
 
-// Always re-encoded to mp3, so any ffmpeg-readable input format works.
-async function chunkAudio(file: string, dir: string): Promise<string[]> {
-  await execFileP("ffmpeg", [
-    "-y",
-    "-loglevel",
-    "error",
-    "-i",
-    file,
-    // Drop cover art / video streams and keep the first audio stream only:
-    // otherwise the segment muxer re-muxes the JPEG into every chunk,
-    // inflating each request ~2× and tripping the provider's size gate.
-    "-vn",
-    "-map",
-    "0:a:0",
-    "-f",
-    "segment",
-    "-segment_time",
-    String(CHUNK_SECONDS),
-    "-c:a",
-    "libmp3lame",
-    "-b:a",
-    "64k",
-    path.join(dir, "chunk%03d.mp3"),
-  ]);
-  return (await readdir(dir)).filter((f) => f.endsWith(".mp3")).sort();
-}
-
 /** Download (cached) → chunk with ffmpeg → transcribe via OpenRouter → persist. */
 export async function transcribeEpisode(
   episode: EpisodeRow,
@@ -88,20 +58,16 @@ async function transcribeEpisodeInner(episode: EpisodeRow, model: string): Promi
 
   const dir = await mkdtemp(path.join(tmpdir(), "podsub-"));
   try {
-    const files = await chunkAudio(file, dir);
+    const files = await chunkAudio(file, dir, CHUNK_SECONDS);
     const words: Word[] = [];
     let language: string | null = null;
 
-    for (const [i, file] of files.entries()) {
+    for (const [i, chunk] of files.entries()) {
       if (i > 0) await sleep(CHUNK_DELAY_MS);
       console.log(`Transcribing chunk ${i + 1}/${files.length}...`);
-      const data = await transcribeChunk(
-        process.env.OPENROUTER_API_KEY ?? "",
-        path.join(dir, file),
-        model,
-      );
+      const data = await transcribeChunk(process.env.OPENROUTER_API_KEY ?? "", chunk.file, model);
       language ??= data.language ?? null;
-      const offset = i * CHUNK_SECONDS;
+      const offset = chunk.offset;
       for (const w of data.words ?? []) {
         words.push({ word: w.word, start: w.start + offset, end: w.end + offset });
       }

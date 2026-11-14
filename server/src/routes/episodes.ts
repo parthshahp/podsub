@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { stat } from "node:fs/promises";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 
@@ -22,7 +22,7 @@ import {
 import { transcribeEpisode } from "../transcription/index.js";
 import { MODEL, isTranscribeModel } from "../config.js";
 import { getJob, getTranscribeError, getTranscribeStatus, setJob } from "../transcription/jobs.js";
-import { cutAudioClip, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
+import { clipEtag, cutAudioClip, MAX_CLIP_SECONDS } from "../lib/audio-clip.js";
 import {
   proxyUpstreamAudio,
   ensureCachedAudioFile,
@@ -156,15 +156,6 @@ export const episodeRoutes = new Hono()
       );
     }
 
-    // ETag folds in the upstream URL + range, so enclosure changes revalidate.
-    const h = createHash("sha256");
-    h.update(row.episode.audio_url);
-    h.update(`:${start}:${end}`);
-    const etag = `"${h.digest("hex").slice(0, 32)}"`;
-    if (c.req.header("if-none-match") === etag) {
-      return new Response(null, { status: 304, headers: { etag } });
-    }
-
     // Hold the cache file so eviction can't delete it mid-slice.
     retainAudio(row.episode.id);
     try {
@@ -174,6 +165,14 @@ export const episodeRoutes = new Hono()
       } catch (err) {
         console.error(`Audio clip fetch failed for episode ${row.episode.id}:`, err);
         return c.json({ error: "Upstream audio fetch failed" }, 502);
+      }
+      // Resolve the source before validating: the file may have been replaced
+      // or evicted/re-downloaded since the browser cached this range.
+      const st = await stat(file);
+      const etag = clipEtag(row.episode.audio_url, st.size, st.mtimeMs, start, end);
+      const cacheHeaders = { etag, "cache-control": "public, no-cache" };
+      if (c.req.header("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers: cacheHeaders });
       }
       let clip: Buffer;
       try {
@@ -187,8 +186,7 @@ export const episodeRoutes = new Hono()
         headers: {
           "content-type": "audio/mpeg",
           "content-length": String(clip.byteLength),
-          etag,
-          "cache-control": "public, max-age=31536000",
+          ...cacheHeaders,
         },
       });
     } finally {
